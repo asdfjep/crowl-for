@@ -1,0 +1,392 @@
+"""
+Shared analysis pipeline.
+
+The pipeline is generic; topic-specific filtering, sources, boards, and scoring
+come from configs/topics/<topic>.json.
+"""
+import json
+import logging
+import re
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
+
+from services.board_classifier import BoardClassifier
+from services.business_relevance import tag_news_list
+from services.deduplicator import NewsDeduplicator
+from services.news_scorer import NewsScorer
+from services.report_generator import ReportGenerator
+from services.topic_config import load_topic_config
+from services.trend_detector import (
+    detect_trends,
+    extract_entities,
+    load_digests,
+    save_daily_digest,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class NewsAnalyzer:
+    """Config-driven weekly news analyzer."""
+
+    def __init__(self, topic: Optional[str] = None):
+        self.topic_config = load_topic_config(topic)
+        self.topic_key = self.topic_config["topic_key"]
+        self.topic_label = self.topic_config.get("label", self.topic_key)
+        self.data_dir = Path(self.topic_config["_data_dir"])
+        self.filter_config = self.topic_config.get("filter", {})
+        self.source_config = self.topic_config.get("sources", [])
+        self.report_prefix = self.topic_config.get("report_prefix", self.topic_key)
+
+        self.deduplicator = NewsDeduplicator(title_threshold=0.85, cluster_threshold=0.55)
+        self.scorer = NewsScorer(topic_config=self.topic_config)
+        self.classifier = BoardClassifier(topic_config=self.topic_config)
+        self.reporter = ReportGenerator()
+
+    def analyze(
+        self,
+        news_list: List[Dict[str, Any]],
+        sources: Optional[List[str]] = None,
+        date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        report_date = self._parse_report_date(date)
+        period_start = report_date - timedelta(days=6)
+        period_end = report_date + timedelta(days=1)
+
+        logger.info("=== News Analysis Pipeline Started ===")
+        logger.info("Topic: %s", self.topic_label)
+        logger.info("Input: %s news items", len(news_list))
+        logger.info("Weekly window: %s to %s", period_start.date(), report_date.date())
+
+        original_count = len(news_list)
+        filtered_news = self._filter_news_by_date(news_list, period_start, period_end)
+        removed_count = original_count - len(filtered_news)
+        logger.info("Weekly filter: %s kept, %s removed", len(filtered_news), removed_count)
+
+        topic_filtered_news = self._filter_topic_news(filtered_news)
+        topic_removed_count = len(filtered_news) - len(topic_filtered_news)
+        logger.info(
+            "%s filter: %s kept, %s removed",
+            self.topic_key,
+            len(topic_filtered_news),
+            topic_removed_count,
+        )
+        news_list = topic_filtered_news
+
+        step_results: Dict[str, Any] = {
+            "period": {
+                "type": "weekly",
+                "start_date": period_start.strftime("%Y-%m-%d"),
+                "end_date": report_date.strftime("%Y-%m-%d"),
+                "topic": self.topic_label,
+                "input_count": len(topic_filtered_news),
+                "removed_count": removed_count,
+                "topic_removed_count": topic_removed_count,
+            }
+        }
+
+        logger.info("Step 1: Deduplication...")
+        unique_news, duplicates = self.deduplicator.deduplicate(news_list)
+        step_results["dedup"] = {
+            "input_count": len(news_list),
+            "unique_count": len(unique_news),
+            "duplicate_count": len(duplicates),
+            "duplicates": duplicates,
+        }
+        logger.info("  Result: %s unique, %s duplicates removed", len(unique_news), len(duplicates))
+
+        logger.info("Step 2: Event Clustering...")
+        clusters = self.deduplicator.cluster_events(unique_news, time_window_hours=24)
+        step_results["clusters"] = clusters
+        logger.info("  Result: %s event clusters", len(clusters))
+
+        logger.info("Step 3: Importance Scoring...")
+        ranked_clusters = self.scorer.rank_clusters(clusters)
+        ranked_news = self.scorer.rank_news(unique_news)
+        step_results["ranked_clusters"] = ranked_clusters
+        step_results["ranked_news"] = ranked_news
+        if ranked_clusters:
+            logger.info(
+                "  Top event: %s (score: %.0f)",
+                ranked_clusters[0].get("representative_title", "")[:50],
+                ranked_clusters[0].get("importance_score", 0),
+            )
+
+        logger.info("Step 4: Board Classification...")
+        self.classifier.classify_list(unique_news)
+        board_summary = self.classifier.get_board_summary(unique_news)
+        step_results["board_summary"] = board_summary
+        logger.info("  Result: %s boards", len(board_summary))
+
+        logger.info("Step 4.5: Business Relevance Tagging...")
+        rel_stats = tag_news_list(unique_news)
+        step_results["business_relevance"] = rel_stats
+        logger.info(
+            "  high:%s medium:%s low:%s none:%s",
+            rel_stats["high"],
+            rel_stats["medium"],
+            rel_stats["low"],
+            rel_stats["none"],
+        )
+
+        logger.info("Step 4.6: Source Health Check...")
+        step_results["source_health"] = self._build_source_health(unique_news)
+        logger.info(
+            "  active:%s missing:%s",
+            len(step_results["source_health"]["active"]),
+            len(step_results["source_health"]["missing"]),
+        )
+
+        logger.info("Step 5: Trend Detection...")
+        today_entities = extract_entities(unique_news, top_k=30)
+        past_digests = load_digests(days=7)
+        trends = detect_trends(today_entities, past_digests, report_date)
+        step_results["trends"] = trends
+        top_event = ranked_clusters[0].get("representative_title", "") if ranked_clusters else ""
+        report_date_str = report_date.strftime("%Y-%m-%d")
+        try:
+            save_daily_digest(report_date_str, today_entities, len(unique_news), len(ranked_clusters), top_event)
+        except OSError as exc:
+            logger.warning("Skipping digest save for %s: %s", report_date_str, exc)
+
+        logger.info("Step 6: Report Generation...")
+        report_content = self.reporter.generate_daily_report(
+            clusters=ranked_clusters,
+            all_news=ranked_news,
+            board_summary=board_summary,
+            sources=sources or [],
+            date=report_date_str,
+            trends=trends,
+            report_type="weekly",
+            topic=self.topic_label,
+            period_start=period_start.strftime("%Y-%m-%d"),
+            period_end=report_date.strftime("%Y-%m-%d"),
+            report_prefix=self.report_prefix,
+        )
+        step_results["report"] = report_content
+        report_path = getattr(self.reporter, "last_report_path", None)
+        brief_path = getattr(self.reporter, "last_brief_path", None)
+        step_results["report_path"] = str(report_path) if report_path else ""
+        step_results["brief_path"] = str(brief_path) if brief_path else ""
+
+        logger.info("=== Analysis Pipeline Completed ===")
+        return step_results
+
+    def analyze_json_file(self, json_path: str, date: Optional[str] = None) -> Dict[str, Any]:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        news_list = data.get("news", [])
+        sources = data.get("sources", [])
+        return self.analyze(news_list, sources=sources, date=date)
+
+    def _parse_report_date(self, date: Optional[str]) -> datetime:
+        if date:
+            try:
+                return datetime.fromisoformat(date[:10])
+            except ValueError:
+                logger.warning("Invalid report date %r, falling back to today", date)
+        return datetime.now()
+
+    def _filter_news_by_date(
+        self,
+        news_list: List[Dict[str, Any]],
+        period_start: datetime,
+        period_end: datetime,
+    ) -> List[Dict[str, Any]]:
+        filtered = []
+        for item in news_list:
+            publish_time = item.get("publishTime") or item.get("publish_time") or ""
+            if not publish_time:
+                continue
+            try:
+                dt = datetime.fromisoformat(
+                    str(publish_time).replace("Z", "+00:00").split("+")[0].split(".")[0]
+                )
+            except (ValueError, TypeError):
+                continue
+            if period_start <= dt < period_end:
+                filtered.append(item)
+        return filtered
+
+    def _filter_topic_news(self, news_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        keywords = self._lowered("keywords")
+        core_keywords = self._lowered("core_keywords")
+        weak_keywords = self._lowered("weak_keywords")
+        exclude_keywords = self._lowered("exclude_keywords")
+        company_keywords = self._lowered("companies")
+        market_noise_keywords = self._lowered("market_noise_keywords")
+        non_topic_noise_keywords = self._lowered("non_topic_noise_keywords")
+        business_signal_keywords = self._lowered("business_signal_keywords")
+        tech_signal_keywords = self._lowered("tech_signal_keywords")
+        required_keywords = self._lowered("required_keywords")
+        allowed_business_categories = set(self.filter_config.get("business_signal_categories", []))
+
+        filtered = []
+        for item in news_list:
+            if self._is_category_or_navigation_url(str(item.get("url", ""))):
+                continue
+            category = str(item.get("category", "")).lower()
+            content_text = " ".join(
+                [
+                    str(item.get("title", "")),
+                    str(item.get("summary", "")),
+                    str(item.get("content", "")),
+                ]
+            ).lower()
+            gate_text = " ".join(
+                [
+                    content_text,
+                    str(item.get("source", "")),
+                    str(item.get("url", "")),
+                ]
+            ).lower()
+
+            if required_keywords and not any(
+                self._keyword_in_text(keyword, gate_text) for keyword in required_keywords
+            ):
+                continue
+
+            has_core_keyword = any(
+                self._keyword_in_text(keyword, content_text) for keyword in core_keywords
+            )
+            has_weak_keyword = any(
+                self._keyword_in_text(keyword, content_text) for keyword in weak_keywords
+            )
+            has_keyword = any(self._keyword_in_text(keyword, content_text) for keyword in keywords)
+            has_company = any(self._keyword_in_text(keyword, content_text) for keyword in company_keywords)
+            has_business_signal = any(
+                self._keyword_in_text(keyword, content_text) for keyword in business_signal_keywords
+            )
+            has_tech_signal = any(
+                self._keyword_in_text(keyword, content_text) for keyword in tech_signal_keywords
+            )
+            is_low_value_noise = any(
+                self._keyword_in_text(keyword, content_text) for keyword in exclude_keywords
+            )
+            has_market_noise = any(
+                self._keyword_in_text(keyword, content_text) for keyword in market_noise_keywords
+            )
+            has_non_topic_noise = any(
+                self._keyword_in_text(keyword, content_text) for keyword in non_topic_noise_keywords
+            )
+
+            if core_keywords or weak_keywords:
+                is_topic_match = (
+                    has_core_keyword
+                    or (has_weak_keyword and (has_company or has_business_signal or has_tech_signal))
+                    or (has_company and has_business_signal)
+                )
+            else:
+                is_topic_match = has_keyword
+                has_core_keyword = has_keyword
+            if not is_topic_match:
+                continue
+            if has_non_topic_noise and not (has_core_keyword and has_tech_signal):
+                continue
+            if has_market_noise and not (has_company or has_business_signal):
+                continue
+            if is_low_value_noise and not (has_company and has_business_signal):
+                continue
+            if has_core_keyword or has_tech_signal or (
+                has_company and (has_weak_keyword or has_business_signal)
+            ) or (
+                has_business_signal and category in allowed_business_categories
+            ):
+                filtered.append(item)
+        return filtered
+
+    def _build_source_health(self, news_list: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+        source_stats: Dict[str, Dict[str, Any]] = {}
+        for item in news_list:
+            src = item.get("source", "unknown")
+            source_stats.setdefault(src, {"count": 0, "high_score": 0})
+            source_stats[src]["count"] += 1
+            source_stats[src]["high_score"] = max(
+                source_stats[src]["high_score"],
+                item.get("importance_score", 0),
+            )
+
+        source_health = {"active": [], "zero": [], "missing": []}
+        for src in self.source_config:
+            if src in source_stats:
+                source_health["active"].append(
+                    {
+                        "name": src,
+                        "count": source_stats[src]["count"],
+                        "max_score": source_stats[src]["high_score"],
+                    }
+                )
+            else:
+                source_health["missing"].append({"name": src})
+        return source_health
+
+    def _lowered(self, key: str) -> List[str]:
+        return [str(kw).lower() for kw in self.filter_config.get(key, [])]
+
+    def _is_category_or_navigation_url(self, url: str) -> bool:
+        parsed = urlparse(url)
+        path = parsed.path.lower().rstrip("/")
+        query = parsed.query.lower()
+        if not path:
+            return True
+        # Mistral's homepage feed exposes product/solution navigation cards as
+        # links. They are not news articles and must not enter the report.
+        if parsed.netloc.lower().endswith("mistral.ai") and (
+            path.startswith("/products/") or path.startswith("/solutions/")
+        ):
+            return True
+        if "category=" in query or "searchkeyword=" in query or "tag=" in query:
+            return True
+        category_parts = ["/coverage/", "/category/", "/tag/", "/topics/", "/topic/", "/search/"]
+        article_parts = [
+            "/blog/",
+            "/news/",
+            "/insights/",
+            "/research/",
+            "/report/",
+            "/reports/",
+            "/press/",
+            "/post/",
+        ]
+        return any(part in f"{path}/" for part in category_parts) and not any(
+            part in f"{path}/" for part in article_parts
+        )
+
+    def _keyword_in_text(self, keyword: str, text: str) -> bool:
+        if not keyword:
+            return False
+        if keyword.isascii():
+            return bool(re.search(r"\b" + re.escape(keyword) + r"\b", text, re.IGNORECASE))
+        return keyword in text
+
+    def get_top_events(self, step_results: Dict[str, Any], top_n: int = 10) -> List[Dict[str, Any]]:
+        return step_results.get("ranked_clusters", [])[:top_n]
+
+    def get_board_breakdown(self, step_results: Dict[str, Any]) -> Dict[str, Any]:
+        return step_results.get("board_summary", {})
+
+
+def run_analysis_on_latest(topic: Optional[str] = None) -> Dict[str, Any]:
+    analyzer = NewsAnalyzer(topic=topic)
+    json_files = list(analyzer.data_dir.glob("news_*.json"))
+    if not json_files:
+        logger.error("No news JSON files found in %s", analyzer.data_dir)
+        return {}
+    latest_json = max(json_files, key=lambda p: p.stat().st_mtime)
+    logger.info("Analyzing latest data: %s", latest_json)
+    return analyzer.analyze_json_file(str(latest_json))
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+    results = run_analysis_on_latest()
+    if results.get("report"):
+        print("\n" + "=" * 60)
+        print("Report preview (first 2000 chars):")
+        print("=" * 60)
+        print(results["report"][:2000])

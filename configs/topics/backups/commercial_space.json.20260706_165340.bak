@@ -1,0 +1,36 @@
+{
+  "label": "商业航天",
+  "report_prefix": "commercial_space",
+  "data_dir": "../../.tmp_commercial_space_news_analyzer/commercial-space-news-analyzer/data",
+  "filter": {
+    "keywords": ["商业航天", "商业卫星", "民营火箭", "卫星星座", "低轨", "LEO", "发射服务", "运载火箭", "火箭", "卫星", "星链", "遥感", "SAR", "在轨服务", "月球商业", "太空物流", "商业载荷", "SpaceX", "Starlink", "Starship", "Falcon", "Blue Origin", "New Glenn", "Rocket Lab", "Relativity Space", "Arianespace", "satellite", "constellation", "launch", "rocket", "payload", "orbital", "spacecraft", "commercial space", "space startup"],
+    "required_keywords": ["商业航天", "商业卫星", "民营火箭", "卫星星座", "低轨", "LEO", "GEO", "发射服务", "运载火箭", "火箭", "卫星", "星链", "遥感", "SAR", "在轨", "月球", "火星", "太空", "航天", "空间站", "轨道", "载荷", "着陆器", "Starlink", "Starship", "Falcon", "New Glenn", "satellite", "constellation", "launch", "rocket", "payload", "orbital", "orbit", "spacecraft", "commercial space", "space startup", "lunar", "mars", "remote sensing", "SpaceNews", "Payload Space", "Spaceflight Now", "SpaceWatch", "Space.com", "SpaceQ", "Orbital Today", "Ars Technica Space", "TechCrunch Space", "SatNews"],
+    "exclude_keywords": ["telescope", "skywatching", "photo of the day", "meteor shower", "black hole", "galaxy", "movie", "film", "game", "天文观测", "望远镜", "天文美图", "黑洞", "星系", "流星雨", "电影", "游戏"],
+    "companies": ["SpaceX", "Starlink", "Blue Origin", "Rocket Lab", "Relativity Space", "Arianespace", "AST SpaceMobile", "Planet", "Maxar", "ICEYE", "Capella Space", "Intuitive Machines", "Astrobotic", "Firefly Aerospace", "Sierra Space", "True Anomaly", "Quantum Space", "长光卫星", "星河动力", "蓝箭航天", "天兵科技", "星际荣耀", "零壹空间", "东方空间"],
+    "market_noise_keywords": ["ETF", "A股", "港股", "美股", "指数", "盘前", "收评", "午评", "证券", "个股", "涨停", "跌停"],
+    "business_signal_keywords": ["contract", "award", "procurement", "funding", "investment", "acquisition", "merger", "revenue", "order", "launch service", "payload", "customer", "partnership", "commercial", "合同", "采购", "中标", "融资", "投资", "并购", "订单", "客户", "发射服务", "商业载荷", "合作"],
+    "tech_signal_keywords": ["satellite", "constellation", "LEO", "GEO", "launch", "rocket", "payload", "spacecraft", "thruster", "propulsion", "reentry", "lander", "orbital", "SAR", "remote sensing", "卫星", "星座", "低轨", "火箭", "载荷", "推进", "入轨", "返回", "着陆器", "遥感"],
+    "business_signal_categories": ["aerospace", "tech"]
+  },
+  "sources": ["SpaceNews", "Via Satellite", "Payload Space", "Satellite Today", "NASA", "ESA", "SpaceX", "Blue Origin", "Rocket Lab", "Arianespace", "European Spaceflight", "Ars Technica Space", "TechCrunch Space", "Space Intel Report", "Breaking Defense Space", "C4ISRNET Space", "SatNews", "中国航天报", "航天爱好者", "商业航天产业联盟", "Commercial Space News 监测"],
+  "scoring": {
+    "high_weight": {"商业航天": 9, "发射服务": 8, "入轨": 7, "组网": 7, "卫星星座": 8, "合同": 7, "采购": 7, "融资": 7, "发射失败": 9, "SpaceX": 8, "Starlink": 7, "Starship": 8, "Blue Origin": 7, "Rocket Lab": 7, "satellite": 6, "constellation": 7, "launch service": 8, "payload": 6, "award": 7, "funding": 7},
+    "down_weight": {"telescope": -8, "skywatching": -8, "photo of the day": -8, "meteor shower": -6, "galaxy": -5, "black hole": -5, "天文观测": -8, "望远镜": -8, "天文美图": -8},
+    "category_base_weight": {"aerospace": 1.3, "tech": 1.05}
+  },
+  "boards": {
+    "definitions": {
+      "a1_policy": {"name": "A1 · 政府政策", "parent": "A1 · 政府政策", "keywords": ["政府", "政策", "法规", "监管", "预算", "拨款", "国会", "白宫", "NASA", "太空军", "航天局", "Space Force", "policy", "budget", "congress", "regulation"]},
+      "a2_network": {"name": "A2 · 卫星组网", "parent": "A2 · 卫星组网", "keywords": ["卫星组网", "星座", "卫星星座", "在轨卫星", "星链", "Starlink", "Kuiper", "OneWeb", "通信卫星", "GEO", "LEO", "低轨", "组网", "constellation", "satellite network"]},
+      "a3_payload": {"name": "A3 · 卫星与载荷技术", "parent": "A3 · 卫星与载荷技术", "keywords": ["载荷", "平台", "卫星平台", "探测器", "传感器", "遥感", "SAR", "激光通信", "数据采集", "payload", "satellite bus", "spacecraft", "sensor", "remote sensing"]},
+      "a4_materials": {"name": "A4 · 卫星新材料", "parent": "A4 · 卫星新材料", "keywords": ["新材料", "材料", "太阳能电池", "电推进", "推进剂", "复合材料", "热控", "涂层", "solar array", "electric propulsion", "material", "composite"]},
+      "a5_applications": {"name": "A5 · 服务与应用", "parent": "A5 · 服务与应用", "keywords": ["服务", "应用", "地球观测", "导航", "定位", "数据服务", "遥感应用", "气象", "农业", "海事", "earth observation", "navigation", "data service", "analytics"]},
+      "a6_launch": {"name": "A6 · 火箭技术与发射", "parent": "A6 · 火箭技术与发射", "keywords": ["火箭", "发射", "升空", "运载", "长征", "星舰", "Falcon", "Starship", "New Glenn", "Blue Origin", "Rocket Lab", "助推器", "发动机", "首飞", "launch", "rocket", "booster", "engine", "liftoff"]},
+      "a7_finance": {"name": "A7 · 融资与并购", "parent": "A7 · 融资与并购", "keywords": ["融资", "并购", "收购", "上市", "IPO", "营收", "亏损", "估值", "订单", "投资", "资本", "funding", "acquisition", "merger", "revenue", "valuation", "investment"]},
+      "a8_media": {"name": "A8 · 媒体评论", "parent": "A8 · 媒体评论", "keywords": ["评论", "观点", "专栏", "解读", "分析", "访谈", "opinion", "commentary", "analysis", "interview"]}
+    },
+    "order": [{"name": "A1 · 政府政策", "ids": ["a1_policy"]}, {"name": "A2 · 卫星组网", "ids": ["a2_network"]}, {"name": "A3 · 卫星与载荷技术", "ids": ["a3_payload"]}, {"name": "A4 · 卫星新材料", "ids": ["a4_materials"]}, {"name": "A5 · 服务与应用", "ids": ["a5_applications"]}, {"name": "A6 · 火箭技术与发射", "ids": ["a6_launch"]}, {"name": "A7 · 融资与并购", "ids": ["a7_finance"]}, {"name": "A8 · 媒体评论", "ids": ["a8_media"]}],
+    "fallback_mapping": {"aerospace": "a6_launch", "ai": "a5_applications", "tech": "a3_payload", "economy": "a7_finance", "finance": "a7_finance", "politics": "a1_policy"},
+    "default_board": "a8_media"
+  }
+}

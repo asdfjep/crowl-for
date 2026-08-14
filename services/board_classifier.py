@@ -1,0 +1,748 @@
+"""
+板块细分分类器
+将粗糙分类细化为专业板块，支持多层级分类
+"""
+import logging
+import re
+from collections import defaultdict
+from typing import List, Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
+
+# AI 周报类型定义：按政策、模型、算力、应用、产业资本等维度拆分
+BOARD_DEFINITIONS = {
+    'a1_policy': {
+        'name': 'A1 · 政策监管',
+        'parent': 'A1 · 政策监管',
+        'keywords': ['政府', '政策', '法规', '监管', '合规', '治理', '安全法案',
+                     '数据安全', '算法备案', 'AI法案', '欧盟AI法案', '白宫',
+                     '国会', '版权', '隐私', '出口管制', '算力管制',
+                     'policy', 'regulation', 'governance', 'compliance',
+                     'AI Act', 'copyright', 'privacy', 'export control'],
+    },
+    'a2_models': {
+        'name': 'A2 · 模型发布',
+        'parent': 'A2 · 模型发布',
+        'keywords': ['大模型', '基础模型', '多模态', '推理模型', '世界模型',
+                     '开源模型', '闭源模型', '参数量', '上下文窗口', '模型发布',
+                     'GPT', 'Claude', 'Gemini', 'Llama', 'DeepSeek', 'Qwen',
+                     'GLM', 'Kimi', 'MiniMax', 'foundation model', 'LLM',
+                     'multimodal', 'reasoning model', 'model release'],
+    },
+    'a3_research': {
+        'name': 'A3 · 技术突破',
+        'parent': 'A3 · 技术突破',
+        'keywords': ['突破', '论文', '研究', '算法', '训练方法', '推理能力',
+                     '强化学习', '合成数据', '对齐', '蒸馏', '微调',
+                     'SOTA', 'benchmark', 'dataset', 'research', 'paper',
+                     'alignment', 'fine-tuning', 'distillation',
+                     'reinforcement learning', 'synthetic data'],
+    },
+    'a4_compute': {
+        'name': 'A4 · 算力与芯片',
+        'parent': 'A4 · 算力与芯片',
+        'keywords': ['算力', 'GPU', 'NPU', 'TPU', 'AI芯片', '推理芯片',
+                     '训练集群', '数据中心', '液冷', 'HBM', 'CUDA',
+                     'NVIDIA', '英伟达', 'AMD', '华为昇腾', '寒武纪',
+                     'AI chip', 'accelerator', 'data center', 'inference chip'],
+    },
+    'a5_applications': {
+        'name': 'A5 · 应用产品',
+        'parent': 'A5 · 应用产品',
+        'keywords': ['应用', '产品', '搜索', '办公', '编程', '代码生成',
+                     'Copilot', 'ChatGPT', '智能助手', '客服', '营销',
+                     '教育', '医疗', '金融', '企业级', 'SaaS',
+                     'application', 'product', 'assistant', 'copilot',
+                     'coding', 'enterprise', 'workflow', 'automation'],
+    },
+    'a6_agents_robotics': {
+        'name': 'A6 · 智能体与机器人',
+        'parent': 'A6 · 智能体与机器人',
+        'keywords': ['智能体', 'Agent', 'AI Agent', '具身智能', '机器人',
+                     '自动驾驶', '无人驾驶', 'RPA', '工具调用', '浏览器代理',
+                     'agentic', 'robotics', 'embodied AI', 'autonomous driving',
+                     'tool use', 'computer use'],
+    },
+    'a7_finance': {
+        'name': 'A7 · 融资与并购',
+        'parent': 'A7 · 融资与并购',
+        'keywords': ['融资', '并购', '收购', '上市', 'IPO', 'S-1', '营收',
+                     '亏损', '估值', '订单', '投资', '资本', '裁员',
+                     'funding', 'acquisition', 'merger', 'revenue',
+                     'valuation', 'investment', 'market', 'stock', 'layoff'],
+    },
+    'a8_media': {
+        'name': 'A8 · 媒体评论',
+        'parent': 'A8 · 媒体评论',
+        'keywords': ['评论', '观点', '专栏', '解读', '分析', '访谈', '媒体',
+                     '社论', 'opinion', 'commentary', 'analysis', 'interview',
+                     'column', 'media', 'review'],
+    },
+}
+
+# 板块展示顺序
+BOARD_ORDER = [
+    ('A1 · 政策监管', ['a1_policy']),
+    ('A2 · 模型发布', ['a2_models']),
+    ('A3 · 技术突破', ['a3_research']),
+    ('A4 · 算力与芯片', ['a4_compute']),
+    ('A5 · 应用产品', ['a5_applications']),
+    ('A6 · 智能体与机器人', ['a6_agents_robotics']),
+    ('A7 · 融资与并购', ['a7_finance']),
+    ('A8 · 媒体评论', ['a8_media']),
+]
+
+
+class BoardClassifier:
+    """板块分类器"""
+    
+    def __init__(self, topic_config: Optional[Dict[str, Any]] = None):
+        boards_config = (topic_config or {}).get("boards", {})
+        definitions = boards_config.get("definitions") or BOARD_DEFINITIONS
+        self.board_definitions = definitions
+        self.fallback_mapping = boards_config.get("fallback_mapping", {})
+        self.default_board = boards_config.get("default_board") or next(iter(definitions))
+        self.topic_key = (topic_config or {}).get("topic_key", "")
+        if boards_config.get("order"):
+            BOARD_ORDER[:] = [(item["name"], item.get("ids", [])) for item in boards_config["order"]]
+        # 预编译关键词索引
+        self.keyword_index = {}
+        for board_id, definition in self.board_definitions.items():
+            for keyword in definition['keywords']:
+                keyword_lower = keyword.lower()
+                if keyword_lower not in self.keyword_index:
+                    self.keyword_index[keyword_lower] = []
+                self.keyword_index[keyword_lower].append(board_id)
+    
+    def classify(self, item: Dict[str, Any]) -> Dict[str, str]:
+        """
+        为单条新闻分类
+        返回: {board_id, board_name, parent_board}
+        """
+        title = item.get('title', '')
+        summary = item.get('summary', '')
+        tags = ' '.join(item.get('tags', []))
+        full_text = f"{title} {summary} {tags}".lower()
+        
+        # 关键词匹配计数
+        board_scores = defaultdict(int)
+        for keyword, board_ids in self.keyword_index.items():
+            if keyword in full_text:
+                for board_id in board_ids:
+                    # 标题中出现权重加倍
+                    if keyword in title.lower():
+                        board_scores[board_id] += 2
+                    else:
+                        board_scores[board_id] += 1
+        
+        if board_scores:
+            priority_board = self._priority_board_for_topic(item, board_scores)
+            if priority_board:
+                best_board_id = priority_board
+            else:
+                # 选择得分最高的板块
+                best_board_id = max(board_scores, key=board_scores.get)
+        else:
+            priority_board = self._priority_board_for_topic(item, board_scores)
+            if priority_board:
+                best_board_id = priority_board
+            else:
+            # 无匹配时使用原始分类映射
+                best_board_id = self._fallback_classification(item)
+        
+        definition = self.board_definitions[best_board_id]
+        return {
+            'board_id': best_board_id,
+            'board_name': definition['name'],
+            'parent_board': definition['parent'],
+        }
+
+    def _priority_board_for_topic(self, item: Dict[str, Any], board_scores: Dict[str, int]) -> Optional[str]:
+        """Apply topic-specific tie breakers where keyword volume can mislead.
+
+        Display market articles often mention LCD/OLED many times, but if the
+        core subject is price, inventory, supply/demand, or utilization, they
+        belong in A1 rather than a technology board.
+        """
+        if self.topic_key == "ai":
+            ai_priority = self._priority_board_for_ai(item, board_scores)
+            if ai_priority:
+                return ai_priority
+
+        if self.topic_key == "commercial_space":
+            space_priority = self._priority_board_for_commercial_space(item, board_scores)
+            if space_priority:
+                return space_priority
+
+        if self.topic_key != "display_polarizer":
+            return None
+
+        title = str(item.get('title', ''))
+        summary = str(item.get('summary', ''))
+        content = str(item.get('content', ''))
+        text = f"{title} {summary} {content}".lower()
+        title_l = title.lower()
+
+        def has_any(signals: List[str], target: str = text) -> bool:
+            return any(signal.lower() in target for signal in signals)
+
+        finance_title_signals = [
+            "融资", "募资", "b轮", "a轮", "c轮", "ipo", "上市", "财报",
+            "营收", "利润", "亏损", "并购", "收购", "投资者", "funding",
+            "financing", "round", "revenue", "earnings", "acquisition",
+            "profit", "loss",
+        ]
+        if "a7_finance_mna" in self.board_definitions and has_any(finance_title_signals, title_l):
+            return "a7_finance_mna"
+
+        polarizer_signals = [
+            "偏光片", "偏光板", "偏光膜", "光学膜", "补偿膜", "tac膜",
+            "pva膜", "三利谱", "杉金光电", "日东电工", "住友化学",
+            "polarizer", "polariser", "polarizing film", "optical film",
+        ]
+        if "a2_polarizer_films" in self.board_definitions and has_any(polarizer_signals, text):
+            return "a2_polarizer_films"
+
+        oled_material_signals = [
+            "zetplex", "lordin", "pt-sp-tcz", "pt(ii)", "platinum dopant",
+            "phosphorescent", "phosphorescence", "dopant", "emitter",
+            "host material", "oled material", "oled materials",
+            "掺杂剂", "磷光", "发射体", "发光材料", "主体材料",
+            "铂掺杂", "pt掺杂", "铂配合物", "器件寿命", "沉积工艺",
+        ]
+        if "a4_oled_microled" in self.board_definitions and any(signal in text for signal in oled_material_signals):
+            return "a4_oled_microled"
+
+        panel_company_title_signals = [
+            "面板厂", "产线", "生产线", "工厂", "扩产", "投产", "量产",
+            "产能", "良率", "8.6代", "b16", "京东方", "tcl华星",
+            "华星光电", "维信诺", "深天马", "惠科", "samsung display",
+            "lg display", "panel maker", "fab", "production line",
+            "capacity", "factory",
+        ]
+        panel_capacity_core_signals = [
+            "面板厂", "产线", "生产线", "工厂", "扩产", "投产", "产能",
+            "8.6代", "b16", "京东方", "tcl华星", "华星光电", "维信诺",
+            "深天马", "惠科", "samsung display", "lg display",
+            "panel maker", "fab", "production line", "capacity", "factory",
+        ]
+        supply_chain_title_signals = [
+            "供应链", "ddi", "驱动芯片", "display driver", "driver ic",
+        ]
+        if (
+            "a3_panel_capacity" in self.board_definitions
+            and (has_any(panel_capacity_core_signals, title_l) or has_any(supply_chain_title_signals, title_l))
+        ):
+            return "a3_panel_capacity"
+
+        display_tech_title_signals = [
+            "oled", "amoled", "woled", "qd-oled", "mini led", "miniled",
+            "micro led", "microled", "硅基oled", "柔性oled", "折叠屏",
+            "蒸镀", "喷墨", "hmo", "ocr", "ltpo", "ltps", "igzo",
+            "microled微显示", "microled 微显示", "microdisplay", "微显示",
+            "晶圆", "工艺", "制程", "良率", "背板", "封装", "设备",
+            "量产设备", "开发", "合作项目", "突破", "提速", "技术路线",
+            "sqD".lower(), "rgb", "智能隐形眼镜", "qd-oled",
+        ]
+        market_title_signals = [
+            "价格", "供需", "库存", "稼动率", "预测", "波动追踪",
+            "出货", "出货量", "市占", "市场份额", "份额", "需求",
+            "采购", "订单", "price", "supply", "demand", "inventory",
+            "forecast", "shipment", "shipments", "market share",
+        ]
+        tech_progress_title_signals = [
+            "量产", "工艺", "制程", "技术", "路线", "提速", "突破",
+            "开发", "设备", "合作", "晶圆", "良率", "背光助力",
+        ]
+        media_title_signals = [
+            "内卷", "换血", "评论", "观点", "专栏", "解读", "深度",
+            "观察", "趋势观察", "怎么看", "为什么", "analysis",
+            "opinion", "commentary",
+        ]
+        market_signals = [
+            "价格", "涨价", "降价", "供需", "需求", "库存", "稼动率",
+            "备货", "砍单", "结算", "预测", "波动追踪", "弱势整理",
+            "出货", "出货量", "市占", "市占率", "市场份额", "份额",
+            "采购", "订单", "tddi", "shipments", "shipment", "market share",
+            "price", "supply", "demand", "inventory", "utilization",
+            "forecast",
+        ]
+        signal_count = sum(1 for signal in market_signals if signal.lower() in text)
+        title_has_market = has_any(market_title_signals, title_l)
+        title_is_tech_progress = has_any(tech_progress_title_signals, title_l)
+        title_is_display_tech = has_any(display_tech_title_signals, title_l)
+        title_is_media = has_any(media_title_signals, title_l)
+        if "a8_media" in self.board_definitions and title_is_media:
+            return "a8_media"
+        if (
+            "a1_policy_supply" in self.board_definitions
+            and (
+                (title_has_market and not title_is_tech_progress)
+                or (signal_count >= 4 and not title_is_display_tech)
+            )
+        ):
+            return "a1_policy_supply"
+
+        lcd_backlight_title_signals = [
+            "lcd", "液晶", "tft-lcd", "背光", "背光模组", "玻璃基板",
+            "彩色滤光片", "显示器面板", "电视面板", "lcd panel",
+            "backlight", "glass substrate",
+        ]
+        if "a5_lcd_backlight" in self.board_definitions and has_any(lcd_backlight_title_signals, title_l):
+            return "a5_lcd_backlight"
+
+        if "a4_oled_microled" in self.board_definitions and has_any(display_tech_title_signals, title_l):
+            return "a4_oled_microled"
+
+        display_tech_signals = [
+            "microled微显示", "microled 微显示", "microled microdisplay",
+            "microdisplay", "微显示", "qd-oled", "喷墨打印", "inkjet",
+            "像素", "灰度", "aln", "氮化铝", "背板", "封装", "薄膜",
+            "gaN-on-silicon".lower(), "器件性能", "器件结构", "制程",
+            "工艺", "research project", "研发项目", "合作项目",
+        ]
+        if "a4_oled_microled" in self.board_definitions and any(signal in text for signal in display_tech_signals):
+            return "a4_oled_microled"
+
+        terminal_title_signals = [
+            "显示器选购", "选购指南", "monitor guide", "best monitor",
+            "gaming monitor", "折叠手机", "智能手机", "手机", "笔记本",
+            "笔电", "平板", "车载", "电视", "电视机", "ar眼镜",
+            "vr", "xr", "安装", "装设", "车站", "户外", "展馆",
+            "展亭", "亭", "kiosk", "pavilion", "installed", "installation",
+            "foldable phone", "smartphone", "notebook",
+        ]
+        if "a6_applications" in self.board_definitions and any(signal in title_l for signal in terminal_title_signals):
+            return "a6_applications"
+
+        panel_company_signals = [
+            "面板厂", "产线", "生产线", "工厂", "扩产", "投产", "量产",
+            "停产", "产能", "良率", "投资", "建设", "厂商", "公司",
+            "boe", "京东方", "tcl华星", "华星光电", "visionox", "维信诺",
+            "auo", "友达", "innolux", "群创", "samsung display",
+            "lg display", "panel maker", "fab", "production line",
+            "capacity", "factory",
+        ]
+        if "a3_panel_capacity" in self.board_definitions and any(signal in text for signal in panel_company_signals):
+            return "a3_panel_capacity"
+        return None
+
+    def _priority_board_for_commercial_space(
+        self,
+        item: Dict[str, Any],
+        board_scores: Dict[str, int],
+    ) -> Optional[str]:
+        """Commercial-space tie breakers.
+
+        The raw keywords overlap heavily: almost every article mentions a
+        satellite, payload, launch or NASA. These rules classify by the actual
+        news event before the generic keyword scores are used.
+        """
+        title = str(item.get('title', ''))
+        summary = str(item.get('summary', ''))
+        content = str(item.get('content', ''))
+        source = str(item.get('source', ''))
+        text = f"{title} {summary} {content} {source}".lower()
+        title_l = title.lower()
+
+        def has_any(patterns: List[str], target: str = text) -> bool:
+            return any(re.search(pattern, target, flags=re.IGNORECASE) for pattern in patterns)
+
+        policy_event = [
+            r'\bfcc\b', r'\bitu\b', r'\bnasa\b.*\brfp\b', r'\bdraft rfp\b',
+            r'\brequest for proposals?\b', r'\blicens', r'\bregulat',
+            r'\brulemaking\b', r'\border\b', r'\bdeadline extension\b',
+            r'\bprocurement\b', r'\bpolicy\b', r'\bsovereignty\b',
+            r'征求建议书', r'草案', r'许可', r'监管', r'规则', r'投票',
+            r'延期', r'国际电联', r'政府', r'政策', r'航天局',
+            r'主权',
+        ]
+        finance_event = [
+            r'\bfunding\b', r'\bfundraises?\b', r'\bfundrais', r'\braises?\b',
+            r'\braised\b', r'\bseed\b', r'\bseries [a-z]\b', r'\bfinancing\b',
+            r'\binvestment\b', r'\binvests?\b', r'\bcapital\b', r'\beib\b',
+            r'\bloan\b', r'\bgrant\b', r'\bcommits?\b.*\b(eur|euro|\$|usd)\b',
+            r'\bceo\b', r'\bacquisition\b', r'\bmerger\b', r'\bipo\b',
+            r'\brevenue\b', r'\bvaluation\b', r'\bcontracts?\b',
+            r'\bcontractors?\b', r'\bappoint', r'\bhires?\b',
+            r'\bleads?\b.*\boffice\b', r'\bnew office\b',
+            r'融资', r'募资', r'筹款',
+            r'投资', r'资本', r'资助', r'贷款', r'承诺提供', r'任命.*ceo',
+            r'并购', r'收购', r'上市', r'估值', r'营收', r'合同',
+            r'承包商', r'任命', r'高管', r'负责人', r'新办事处',
+        ]
+        launch_event = [
+            r'\bfalcon\b', r'\btransporter[- ]?\d+', r'\brideshare\b',
+            r'\blaunch(es|ed|ing)?\b', r'\bliftoff\b', r'\brocket\b',
+            r'\bbooster\b', r'\blaunch service\b', r'\bgeo rideshare\b',
+            r'\bdeploy(ed|s|ment)?\b.*\borbit\b', r'\bmission\b.*\blaunched\b',
+            r'发射', r'升空', r'火箭', r'猎鹰', r'拼车', r'共享发射',
+            r'发射服务', r'运载', r'助推器', r'部署.*轨道', r'送入轨道',
+        ]
+        network_event = [
+            r'\bconstellation\b', r'\bbroadband constellation\b',
+            r'\bsatellite network\b', r'\bstarlink\b', r'\bkuiper\b',
+            r'\boneweb\b', r'\bleo\b', r'\bgeo\b', r'\bntn\b',
+            r'\bconnectivity\b', r'\brelay satellite\b', r'\bdata relay\b',
+            r'\bcommunications relay\b',
+            r'星座', r'卫星组网', r'宽带星座', r'星链', r'低轨',
+            r'组网', r'通信卫星', r'卫星网络', r'中继卫星', r'数据中继',
+        ]
+        payload_tech_event = [
+            r'\bpayload\b', r'\bimager\b', r'\bmultispectral\b',
+            r'\bsensor\b', r'\bsatellite bus\b', r'\bspacecraft\b',
+            r'\boptical terminal\b', r'\blaser terminal\b',
+            r'\blaser communication\b', r'\bquantum\b', r'\bencryption\b',
+            r'\bcapstone\b', r'\bcislunar testbed\b', r'\bsemiconductor\b',
+            r'\b3d printer\b', r'\bmanufacturing test\b', r'\bon-orbit processing\b',
+            r'\borbital maneuvers?\b', r'\brendezvous\b',
+            r'\bdesign and build\b', r'\bdesign.*contract\b',
+            r'载荷', r'成像仪', r'多光谱', r'传感器', r'卫星平台',
+            r'航天器', r'激光通信', r'激光终端', r'量子', r'加密',
+            r'测试台', r'半导体制造', r'3d打印', r'在轨处理',
+            r'空间监视数据', r'碰撞警报', r'轨道机动', r'交会',
+            r'设计.*建造', r'设计.*合同',
+        ]
+        materials_power_event = [
+            r'\bnuclear\b', r'\btritium\b', r'\bbetavoltaic\b',
+            r'\bradioisotope\b', r'\bsolar array\b', r'\belectric propulsion\b',
+            r'\bpropellant\b', r'\bthermal control\b', r'\bcomposite\b',
+            r'\bcoating\b', r'核动力', r'商用核', r'氚', r'贝塔伏特',
+            r'放射性同位素', r'太阳能电池', r'电推进', r'推进剂',
+            r'热控', r'复合材料', r'涂层', r'新材料',
+        ]
+        application_event = [
+            r'\bearth observation\b', r'\beo\b', r'\bremote sensing\b',
+            r'\bdata service\b', r'\banalytics\b', r'\bnavigation\b',
+            r'\bpositioning\b', r'\bweather\b', r'\bagriculture\b',
+            r'\bmaritime\b', r'\bspace situational awareness\b',
+            r'\bcollision alerts?\b', r'\bsatellite refueling\b',
+            r'\bservicing\b', r'\breboost\b', r'\brescue mission\b',
+            r'\blongevity\b', r'地球观测', r'遥感应用', r'数据服务',
+            r'导航', r'定位', r'气象', r'农业', r'海事', r'空间态势感知',
+            r'碰撞预警', r'卫星加油', r'在轨服务', r'重新推进',
+            r'救援任务', r'应用',
+        ]
+        media_context = [
+            r'\bopinion\b', r'\bcommentary\b', r'\banalysis\b',
+            r'\bcoming of age\b', r'\bwhat.*means\b', r'\binside\b',
+            r'\bdeepening ties\b', r'\boutlook\b', r'\btrend\b',
+            r'评论', r'观点', r'专栏', r'解读', r'分析', r'趋势',
+            r'展望', r'意味着什么', r'走向成熟', r'合作大门',
+        ]
+
+        # A8: analysis/commentary first, unless it is clearly a hard policy or
+        # capital event.
+        if has_any(media_context, title_l) and not (
+            has_any(policy_event, title_l) or has_any(finance_event, title_l)
+        ):
+            return 'a8_media'
+
+        # Satellite design/build contracts are primarily payload/spacecraft
+        # technology items, not financing stories.
+        if has_any([
+            r'\bdesign and build\b', r'\bdesign.*contract\b',
+            r'设计.*建造', r'设计.*合同', r'风感卫星',
+        ], title_l):
+            return 'a3_payload'
+
+        # A7: financing, funding rounds, loans, investment and management moves.
+        if has_any(finance_event, title_l):
+            return 'a7_finance'
+
+        # A2: relay/network connectivity can otherwise fall through to broad
+        # agency or satellite keywords.
+        if has_any(network_event, title_l):
+            return 'a2_network'
+
+        # A1: rules, licenses, RFPs, government procurement and formal agency
+        # decisions. Do this before satellite/network keywords.
+        if has_any(policy_event, title_l):
+            return 'a1_policy'
+
+        # A4: materials, power, propulsion and satellite hardware materials.
+        # Put this before launch so "first commercial nuclear satellite sent to
+        # orbit" is treated as a power/materials milestone, not just a launch.
+        if has_any(materials_power_event, text):
+            return 'a4_materials'
+
+        # A6: launch execution and launch-service offerings. If the article is
+        # mainly "rocket launched/deployed payloads", keep it in launch.
+        if has_any(launch_event, title_l):
+            return 'a6_launch'
+
+        # A5: downstream services and applications, including EO initiatives,
+        # SSA/collision alerts, refueling and rescue/reboost services.
+        if has_any(application_event, text):
+            return 'a5_applications'
+
+        # A3: satellite/payload technology and onboard systems. Place before
+        # A2 so "imagers for a constellation" stays payload, not network.
+        if has_any(payload_tech_event, text):
+            return 'a3_payload'
+
+        # A2: constellation/network deployment and connectivity itself.
+        if has_any(network_event, text):
+            return 'a2_network'
+
+        # Text-level fallbacks for cases where titles are short.
+        if has_any(finance_event, text):
+            return 'a7_finance'
+        if has_any(policy_event, text):
+            return 'a1_policy'
+        if has_any(launch_event, text):
+            return 'a6_launch'
+        if has_any(media_context, text):
+            return 'a8_media'
+        return None
+
+    def _priority_board_for_ai(self, item: Dict[str, Any], board_scores: Dict[str, int]) -> Optional[str]:
+        title = str(item.get('title', ''))
+        summary = str(item.get('summary', ''))
+        content = str(item.get('content', ''))
+        source = str(item.get('source', ''))
+        text = f"{title} {summary} {content} {source}".lower()
+        title_l = title.lower()
+        source_l = source.lower()
+
+        def has_any(patterns: List[str], target: str = text) -> bool:
+            return any(re.search(pattern, target, flags=re.IGNORECASE) for pattern in patterns)
+
+        hard_policy = [
+            r'\bbill\b', r'\blaw\b', r'\bpolicy\b', r'\bregulat', r'\bgovernance\b',
+            r'\bcompliance\b', r'\brestriction', r'\bban\b', r'\bprivacy\b',
+            r'\bcopyright\b', r'\bdata privacy\b', r'\bopt[- ]out\b',
+            r'\bclass action\b', r'\blawsuit\b', r'\bcourt\b', r'\bjudge\b',
+            r'\btreasury\b', r'\bexport control\b', r'法案', r'法律', r'政策',
+            r'监管', r'限制', r'禁令', r'隐私', r'版权', r'合规', r'治理',
+            r'诉讼', r'法院', r'法官', r'选择退出', r'数据.*训练',
+            r'财政部', r'出口管制', r'位置数据', r'健康.*数据',
+        ]
+        finance_event = [
+            r'\bfunding\b', r'\bseries [a-z]\b', r'\braises?\b', r'\braised\b',
+            r'\bacquisition\b', r'\bacquire[sd]?\b', r'\bmerger\b',
+            r'\btender offer\b', r'\bipo\b', r'\bs-1\b', r'\bvaluation\b',
+            r'\brevenue\b', r'\bearnings?\b', r'\bprofit\b', r'\bexit\b',
+            r'\bventure capital\b', r'\bunicorn\b', r'\bvc firm\b',
+            r'\bstartup exits?\b', r'\blayoffs?\b', r'\blays?\s+off\b',
+            r'\bjob cuts?\b', r'\bstock\b', r'\bshares?\b', r'融资', r'募资',
+            r'并购', r'收购', r'估值', r'上市', r'ipo', r'营收', r'财报',
+            r'利润', r'亏损', r'投资', r'裁员', r'股价', r'股票',
+        ]
+        compute_event = [
+            r'\bgpu\b', r'\bnvidia\b', r'\bamd\b', r'\bai chip\b',
+            r'\bchip\b', r'\bsemiconductor\b', r'\baccelerator\b',
+            r'\binference chip\b', r'\bdata center\b', r'\bhbm\b',
+            r'\bcuda\b', r'\bcompute\b', r'\bcluster\b', r'\bfoundry\b',
+            r'\bmanaged compute\b', r'算力', r'芯片', r'半导体', r'英伟达',
+            r'数据中心', r'训练集群', r'推理芯片', r'gpu', r'hbm',
+            r'托管计算', r'计算积分', r'算力积分',
+        ]
+        agent_event = [
+            r'\bclaude cowork\b', r'\bclaude code\b', r'\bcodex\b',
+            r'\bcoding agent\b', r'\bagents?\b', r'\bagentic\b',
+            r'\brobot', r'\brobotics\b', r'\bhumanoid\b', r'\bembodied ai\b',
+            r'\bautonomous driving\b', r'\btool use\b', r'\bcomputer use\b',
+            r'\bransomware\b', r'\bcrawler', r'\bsandbox\b', r'智能体',
+            r'机器人', r'具身', r'自动驾驶', r'代码智能体', r'勒索软件',
+            r'爬虫', r'沙箱', r'代理',
+        ]
+        application_event = [
+            r'\bscience workbench\b', r'\bdrug development\b', r'\bhealthcare\b',
+            r'\bmedical\b', r'\bturbine', r'\benterprise\b', r'\bworkflow\b',
+            r'\bplatform\b', r'\baccelerator\b', r'\bcoding tool\b',
+            r'\bsearch\b', r'\boffice\b', r'\bworkspace\b', r'\bcopilot\b',
+            r'\bassistant\b', r'\bgenerator\b', r'\bimage generator\b',
+            r'\bported\b', r'\bport\b.*\bios\b', r'\barchitecture\b',
+            r'\bit leaders?\b', r'\bscale deployment\b', r'药物', r'医疗',
+            r'科学工作台', r'工业', r'涡轮机', r'企业', r'平台',
+            r'加速器', r'移植', r'应用案例', r'架构', r'部署',
+            r'办公', r'搜索', r'助手', r'生成器', r'图像生成',
+            r'企业级', r'工作流', r'IT领导者',
+        ]
+        model_subject = [
+            r'\b(gpt|claude|sonnet|opus|haiku|gemini|llama|deepseek|qwen|kimi|glm|minimax|fable|mythos)\b',
+            r'\bmodel\b', r'\bllm\b', r'\bfoundation model\b',
+            r'\breasoning model\b', r'\bmultimodal model\b',
+            r'大模型', r'基础模型', r'模型发布', r'推理模型',
+            r'多模态模型', r'开源模型', r'闭源模型',
+        ]
+        model_event = [
+            r'\blaunch', r'\brelease', r'\bintroduc', r'\bunveil',
+            r'\brolls? out\b', r'\bupgrade', r'\bbenchmark',
+            r'\btechnical report\b', r'\bcapabilit', r'\bweights?\b',
+            r'\bopen[- ]source\b', r'发布', r'推出', r'上线', r'升级',
+            r'开源', r'权重', r'参数', r'上下文', r'能力', r'技术报告',
+            r'基准', r'评测',
+        ]
+        research_event = [
+            r'\bpaper\b', r'\bresearch\b', r'\btechnical report\b',
+            r'\bbenchmark', r'\bdataset\b', r'\bevaluat', r'\bexperiment',
+            r'\btraining method\b', r'\balignment\b', r'\bfine[- ]tuning\b',
+            r'\bdistillation\b', r'\breinforcement learning\b',
+            r'\binterpretability\b', r'\bmechanistic\b', r'\bj-lens\b',
+            r'\bj-space\b', r'\bjacobian\b', r'\bworld model\b',
+            r'\bphysical ai\b', r'\bstreaming multimodal\b',
+            r'\bmultimodal streaming\b', r'论文', r'研究', r'技术报告',
+            r'基准', r'数据集', r'评测', r'实验', r'训练方法',
+            r'对齐', r'微调', r'蒸馏', r'强化学习', r'可解释性',
+            r'世界模型', r'物理ai', r'物理 AI', r'流式多模态',
+            r'多模态技术', r'技术接棒', r'内部工作记忆',
+        ]
+        media_context = [
+            r'\bopinion\b', r'\bcommentary\b', r'\banalysis\b', r'\bcolumn\b',
+            r'\breview\b', r'\btrend\b', r'\bhype\b', r'\bwhat is\b',
+            r'\beverything to know\b', r'\badvertis', r'\bad\b',
+            r'\bcommercial\b', r'\bworkspace ad\b', r'\bfounding fathers?\b',
+            r'\bdeclaration of independence\b', r'\bcreepy\b', r'\boutrage',
+            r'\bfandom\b', r'\bfanfiction\b', r'\bfan fiction\b',
+            r'\bfanworks?\b', r'\bcreator community\b', r'\banti[- ]ai\b',
+            r'\bai detection\b', r'\beconomist\b', r'\bwall street\b',
+            r'\bprofit gains?\b', r'\bprofitability\b', r'\bexpectations?\b',
+            r'评论', r'观点', r'专栏', r'解读', r'分析', r'访谈',
+            r'趋势', r'炒作', r'承诺', r'广告', r'开国元勋',
+            r'独立宣言', r'令人愤怒', r'毛骨悚然', r'想象.*人工智能',
+            r'同人', r'创作者社区', r'反ai', r'反 AI', r'检测方法',
+            r'误伤', r'经济学家', r'华尔街', r'利润增长', r'市场预期',
+        ]
+
+        # Research papers and benchmark/dataset work should beat generic
+        # policy/model/agent wording, especially for arXiv titles.
+        if (
+            'arxiv' in source_l
+            or has_any(research_event, title_l)
+        ):
+            return 'a3_research'
+
+        # Commentary and cultural/media framing should not be pulled into A2/A5
+        # by famous product or model names.
+        if has_any(media_context, title_l) or has_any([
+            r'\bcan\b.*\bremain\b', r'\bopen platform\b',
+            r'\bstake in openai\b', r'\bfamily.*stake\b',
+            r'\bwealth sharing\b', r'\bai wealth\b',
+            r'能否继续', r'开放平台', r'财富共享', r'AI财富',
+        ], text):
+            return 'a8_media'
+
+        # A1: regulation, privacy, copyright, court and government actions.
+        if has_any(hard_policy):
+            return 'a1_policy'
+
+        # A7: capital, M&A, layoffs and operating numbers beat generic AI terms.
+        if has_any(finance_event, title_l):
+            return 'a7_finance'
+
+        # A4: chips, GPUs, data centers and compute infrastructure.
+        if has_any(compute_event, title_l):
+            return 'a4_compute'
+
+        # A3: methods, interpretability, benchmarks and technical capability
+        # articles that are not simply announcing a model package.
+        if has_any(research_event, text) and not (
+            has_any(model_subject, title_l) and has_any(model_event, title_l)
+        ):
+            return 'a3_research'
+
+        # A6: agents, robots and autonomous execution. Research papers already
+        # returned A3 above, so this mainly catches products/incidents.
+        if has_any(agent_event, text):
+            return 'a6_agents_robotics'
+
+        # A5: concrete application/product/deployment stories. This runs before
+        # A2 so "Claude used for drug development" or "AI image generator" does
+        # not become a model-release item.
+        if has_any(application_event, text):
+            return 'a5_applications'
+
+        # Model releases should beat agent/application wording when a named model is launched.
+        if has_any(model_subject, title_l) and has_any(model_event, title_l):
+            return 'a2_models'
+
+        # Chips, GPU, data center and AI infrastructure should beat generic products.
+        if has_any(compute_event, text):
+            return 'a4_compute'
+
+        # Model board is for actual model launches/capability updates, not every product using a model.
+        if has_any(model_subject, title_l) and has_any(model_event, text):
+            if not has_any(media_context + application_event + agent_event + finance_event + hard_policy, text):
+                return 'a2_models'
+
+        # Final semantic tie-breakers before falling back to raw keyword scores.
+        if has_any(finance_event, text):
+            return 'a7_finance'
+        if has_any(hard_policy, text):
+            return 'a1_policy'
+        if has_any(media_context, text):
+            return 'a8_media'
+
+        return None
+    
+    def classify_list(self, news_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """批量分类"""
+        for item in news_list:
+            classification = self.classify(item)
+            item['board_id'] = classification['board_id']
+            item['board_name'] = classification['board_name']
+            item['parent_board'] = classification['parent_board']
+        return news_list
+    
+    def get_board_summary(self, news_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """生成板块统计摘要"""
+        boards = defaultdict(lambda: {'count': 0, 'items': [], 'sources': set()})
+        
+        for item in news_list:
+            board_id = item.get('board_id', 'other')
+            parent = item.get('parent_board', 'A8 · 媒体评论')
+            key = f"{parent}|{board_id}"
+            
+            boards[key]['count'] += 1
+            boards[key]['items'].append(item)
+            boards[key]['sources'].add(item.get('source', 'unknown'))
+            boards[key]['board_name'] = item.get('board_name', '')
+            boards[key]['parent_board'] = parent
+        
+        # 按数量排序
+        sorted_boards = sorted(boards.items(), key=lambda x: x[1]['count'], reverse=True)
+        
+        result = {}
+        for key, data in sorted_boards:
+            result[key] = {
+                'board_name': data['board_name'],
+                'parent_board': data['parent_board'],
+                'count': data['count'],
+                'source_count': len(data['sources']),
+                'top_items': sorted(data['items'], 
+                                   key=lambda x: x.get('importance_score', 0), 
+                                   reverse=True)[:5],
+            }
+        
+        return result
+    
+    def _fallback_classification(self, item: Dict[str, Any]) -> str:
+        """当关键词无匹配时的回退分类"""
+        category = item.get('category', '').lower()
+        mapping = self.fallback_mapping or {
+            'ai': 'a5_applications',
+            'tech': 'a3_research',
+            'economy': 'a7_finance',
+            'finance': 'a7_finance',
+            'military': 'a1_policy',
+            'politics': 'a1_policy',
+        }
+        mapped_board = mapping.get(category, self.default_board)
+        # display_polarizer 的历史数据里不少 crawler 会把所有显示行业新闻标成
+        # polarizer。只有文本或来源真的命中偏光片/光学膜关键词时，才回退到 A2，
+        # 避免 LED 展会、NVIDIA 控制面板等泛显示新闻被硬塞进 A2。
+        if mapped_board == 'a2_polarizer_films' and not self._has_board_signal(item, mapped_board):
+            return self.default_board
+        return mapped_board
+
+    def _has_board_signal(self, item: Dict[str, Any], board_id: str) -> bool:
+        definition = self.board_definitions.get(board_id, {})
+        keywords = definition.get('keywords', [])
+        text = " ".join([
+            str(item.get('title', '')),
+            str(item.get('summary', '')),
+            " ".join(item.get('tags', [])),
+        ]).lower()
+        return any(str(keyword).lower() in text for keyword in keywords)

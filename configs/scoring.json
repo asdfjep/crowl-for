@@ -1,0 +1,48 @@
+{
+  "high_weight": {
+    "OpenAI": 9,
+    "Anthropic": 9,
+    "Google DeepMind": 8,
+    "DeepMind": 8,
+    "Meta AI": 7,
+    "xAI": 7,
+    "Mistral": 7,
+    "Cohere": 6,
+    "Perplexity": 6,
+    "GPT": 8,
+    "Claude": 8,
+    "Gemini": 7,
+    "大模型": 8,
+    "模型发布": 9,
+    "开源": 8,
+    "API": 7,
+    "价格": 6,
+    "token": 6,
+    "context window": 7,
+    "Codex": 7,
+    "Claude Code": 7,
+    "OpenClaw": 6,
+    "Hermes": 6,
+    "融资": 7,
+    "收购": 7,
+    "监管": 7,
+    "AI safety": 7,
+    "benchmark": 6
+  },
+  "down_weight": {
+    "AI wallpaper": -18,
+    "AI girlfriend": -18,
+    "prompt pack": -12,
+    "工具合集": -12,
+    "提示词": -8,
+    "壁纸": -18,
+    "头像": -15,
+    "电影": -10,
+    "游戏": -10
+  },
+  "category_base_weight": {
+    "ai": 1.25,
+    "tech": 1.05,
+    "economy": 1.0
+  }
+}

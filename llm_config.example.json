@@ -1,0 +1,6 @@
+{
+  "api_key": "YOUR_API_KEY_HERE",
+  "base_url": "https://api.vectorengine.ai/v1",
+  "model": "deepseek-v4-flash",
+  "timeout": 60
+}

@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""
+Run source health checks inside a crawler service directory.
+
+This script is intentionally service-agnostic. The unified analyzer launches it
+with cwd set to ai-news-service / commercial-space-news-service /
+display-polarizer-news-service, so it can reuse the real crawler classes.
+"""
+import asyncio
+import json
+import os
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional
+
+
+def _item_to_dict(item: Any) -> Dict[str, Any]:
+    if item is None:
+        return {}
+    if isinstance(item, dict):
+        return item
+    if hasattr(item, "to_dict"):
+        try:
+            converted = item.to_dict()
+            if isinstance(converted, dict):
+                return converted
+        except Exception:
+            pass
+    data = {}
+    for key in ("title", "url", "source", "summary", "content", "publish_time", "publishTime"):
+        if hasattr(item, key):
+            data[key] = getattr(item, key)
+    return data
+
+
+def _inject_service_venv_paths(service_dir: Path) -> None:
+    # Service venv launchers can break when their base interpreter moves, but
+    # the installed packages remain usable for imports from the current runtime.
+    extra_paths = [
+        service_dir / ".venv" / "Lib",
+        service_dir / ".venv" / "Lib" / "site-packages",
+    ]
+    for path in extra_paths:
+        path_str = str(path)
+        if path.exists() and path_str not in sys.path:
+            sys.path.insert(0, path_str)
+
+
+def _parse_datetime(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, str) and value.strip():
+        text = value.strip().replace("Z", "+00:00")
+        try:
+            dt = datetime.fromisoformat(text)
+        except ValueError:
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%m-%d %H:%M"):
+                try:
+                    parsed = datetime.strptime(text, fmt)
+                    if fmt == "%m-%d %H:%M":
+                        parsed = parsed.replace(year=datetime.now().year)
+                    dt = parsed
+                    break
+                except ValueError:
+                    continue
+            else:
+                return None
+    else:
+        return None
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _validate_items(items: Iterable[Any], stale_days: int) -> Dict[str, Any]:
+    dict_items = [_item_to_dict(item) for item in items]
+    total = len(dict_items)
+    newest: Optional[datetime] = None
+    missing_title = 0
+    missing_url = 0
+    missing_time = 0
+    missing_text = 0
+    short_title = 0
+
+    for item in dict_items:
+        title = str(item.get("title") or "").strip()
+        url = str(item.get("url") or "").strip()
+        text = str(item.get("content") or item.get("summary") or "").strip()
+        published = (
+            item.get("publishTime")
+            or item.get("publish_time")
+            or item.get("published_at")
+            or item.get("date")
+        )
+        dt = _parse_datetime(published)
+
+        if not title:
+            missing_title += 1
+        elif len(title) < 6:
+            short_title += 1
+        if not url:
+            missing_url += 1
+        if not dt:
+            missing_time += 1
+        else:
+            newest = dt if newest is None or dt > newest else newest
+        if not text or len(text) < 40:
+            missing_text += 1
+
+    issues: List[str] = []
+    if total == 0:
+        issues.append("no_items")
+    if total and missing_title / total >= 0.5:
+        issues.append("title_extract_abnormal")
+    if total and short_title / total >= 0.5:
+        issues.append("title_too_short")
+    if total and missing_url / total >= 0.5:
+        issues.append("url_missing")
+    if total and missing_time / total >= 0.5:
+        issues.append("time_extract_abnormal")
+    if total and missing_text / total >= 0.8:
+        issues.append("body_extract_abnormal")
+
+    stale_by_days = None
+    if newest:
+        stale_by_days = (datetime.now(timezone.utc) - newest).days
+        if stale_by_days > stale_days:
+            issues.append(f"stale_{stale_by_days}d")
+
+    return {
+        "issues": issues,
+        "newest": newest.isoformat() if newest else "",
+        "stale_days": stale_by_days,
+        "missing_title": missing_title,
+        "missing_url": missing_url,
+        "missing_time": missing_time,
+        "missing_text": missing_text,
+    }
+
+
+async def _fetch_once(crawler: Any, timeout: int) -> List[Any]:
+    async with crawler:
+        result = await asyncio.wait_for(crawler.fetch_news(), timeout=timeout)
+    return list(result or [])
+
+
+async def _check_source(name: str, crawler: Any, timeout: int, retries: int, stale_days: int) -> Dict[str, Any]:
+    last_error = ""
+    started = time.perf_counter()
+
+    for attempt in range(retries + 1):
+        try:
+            items = await _fetch_once(crawler, timeout)
+            validation = _validate_items(items, stale_days)
+            status = "ok"
+            if validation["issues"]:
+                status = "warn"
+            if attempt > 0:
+                status = "recovered" if status == "ok" else f"recovered_{status}"
+            return {
+                "source": name,
+                "status": status,
+                "items": len(items),
+                "newest": validation["newest"],
+                "issues": validation["issues"],
+                "error": "",
+                "attempts": attempt + 1,
+                "duration_sec": round(time.perf_counter() - started, 2),
+                "details": validation,
+            }
+        except Exception as exc:
+            last_error = f"{type(exc).__name__}: {exc}"
+            if attempt < retries:
+                await asyncio.sleep(min(2 ** attempt, 5))
+
+    return {
+        "source": name,
+        "status": "error",
+        "items": 0,
+        "newest": "",
+        "issues": ["fetch_failed"],
+        "error": last_error,
+        "attempts": retries + 1,
+        "duration_sec": round(time.perf_counter() - started, 2),
+        "details": {},
+    }
+
+
+async def _run() -> Dict[str, Any]:
+    service_dir = Path.cwd()
+    sys.path.insert(0, str(service_dir))
+    _inject_service_venv_paths(service_dir)
+
+    from app.scheduler import Scheduler  # type: ignore
+
+    scheduler = Scheduler(push_url=None)
+    await scheduler.load_sources()
+
+    timeout = int(os.getenv("NEWS_HEALTH_SOURCE_TIMEOUT", "30"))
+    retries = int(os.getenv("NEWS_HEALTH_RETRIES", "1"))
+    stale_days = int(os.getenv("NEWS_HEALTH_STALE_DAYS", "7"))
+    concurrency = max(1, int(os.getenv("NEWS_HEALTH_CONCURRENCY", "4")))
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def guarded(name: str, crawler: Any) -> Dict[str, Any]:
+        async with semaphore:
+            return await _check_source(name, crawler, timeout, retries, stale_days)
+
+    checks = [
+        guarded(name, crawler)
+        for name, crawler in sorted(scheduler.sources.items(), key=lambda pair: pair[0].lower())
+    ]
+    results = await asyncio.gather(*checks)
+    counts: Dict[str, int] = {}
+    for item in results:
+        counts[item["status"]] = counts.get(item["status"], 0) + 1
+
+    return {
+        "checked_at": datetime.now().isoformat(timespec="seconds"),
+        "service_dir": str(service_dir),
+        "settings": {
+            "timeout_sec": timeout,
+            "retries": retries,
+            "stale_days": stale_days,
+            "concurrency": concurrency,
+        },
+        "summary": counts,
+        "results": results,
+    }
+
+
+def main() -> None:
+    payload = asyncio.run(_run())
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,7 @@
+# Analysis dependencies
+jieba==0.42.1
+
+# Server (optional)
+fastapi==0.115.0
+uvicorn==0.30.0
+pydantic==2.9.0

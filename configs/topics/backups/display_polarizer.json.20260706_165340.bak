@@ -1,0 +1,39 @@
+{
+  "label": "偏光板与显示行业",
+  "report_prefix": "display_polarizer",
+  "data_dir": "../../.tmp_display_polarizer_news_analyzer/display-polarizer-news-analyzer/data",
+  "filter": {
+    "keywords": ["偏光片", "偏光板", "偏光膜", "光学膜", "补偿膜", "TAC膜", "PVA膜", "扩散膜", "增亮膜", "量子点膜", "显示面板", "面板", "面板厂", "模组", "背光", "玻璃基板", "液晶", "OLED", "AMOLED", "WOLED", "QD-OLED", "MiniLED", "MicroLED", "LCD", "TFT", "LTPS", "LTPO", "IGZO", "折叠屏", "柔性屏", "车载显示", "AR显示", "VR显示", "XR显示", "电视面板", "电视出货", "TV shipments", "K-Display", "Display Week", "SID Display Week", "AWE", "XREAL", "Android XR", "polarizer", "polariser", "polarizing film", "optical film", "display panel", "panel maker", "LCD panel", "OLED panel", "backlight", "display module", "foldable display", "automotive display"],
+    "core_keywords": ["偏光片", "偏光板", "偏光膜", "光学膜", "补偿膜", "TAC膜", "PVA膜", "扩散膜", "增亮膜", "量子点膜", "显示面板", "面板厂", "背光", "玻璃基板", "液晶", "OLED", "AMOLED", "WOLED", "QD-OLED", "MiniLED", "MicroLED", "LCD", "TFT", "LTPS", "LTPO", "IGZO", "折叠屏", "柔性屏", "车载显示", "AR显示", "VR显示", "XR显示", "电视面板", "电视出货", "TV shipments", "K-Display", "Display Week", "SID Display Week", "AWE", "XREAL", "Android XR", "polarizer", "polariser", "polarizing film", "optical film", "display panel", "panel maker", "LCD panel", "OLED panel", "backlight", "display module", "foldable display", "automotive display"],
+    "weak_keywords": ["显示", "显示器", "显示屏", "屏幕", "display", "screen", "TV", "television", "monitor", "AR", "VR", "XR"],
+    "exclude_keywords": ["wallpaper", "screenshot", "game trailer", "movie", "film review", "手机壁纸", "截图", "游戏画面", "电影", "电视剧", "影评", "显示天气"],
+    "companies": ["BOE", "京东方", "TCL华星", "华星光电", "CSOT", "Visionox", "维信诺", "天马", "深天马", "HKC", "惠科", "LG Display", "Samsung Display", "三星显示", "AUO", "友达", "Innolux", "群创", "Sharp", "JDI", "Nitto Denko", "日东电工", "住友化学", "Sumitomo Chemical", "LG Chem", "三利谱", "杉金光电", "明基材料", "康宁", "Corning"],
+    "market_noise_keywords": ["ETF", "A股", "港股", "美股", "指数", "盘前", "收评", "午评", "证券", "个股", "涨停", "跌停"],
+    "business_signal_keywords": ["contract", "award", "procurement", "funding", "investment", "acquisition", "merger", "revenue", "order", "shipment", "capacity", "utilization", "price", "supply", "demand", "inventory", "capex", "production", "fab", "商业", "产业", "合同", "采购", "融资", "投资", "并购", "收购", "订单", "营收", "出货", "产能", "稼动率", "价格", "涨价", "降价", "供需", "库存", "扩产", "投产", "量产"],
+    "tech_signal_keywords": ["OLED", "AMOLED", "WOLED", "QD-OLED", "MiniLED", "MicroLED", "LCD", "TFT", "LTPS", "LTPO", "IGZO", "inkjet printing", "evaporation", "backplane", "encapsulation", "photolithography", "mask", "substrate", "polarizer", "optical film", "backlight", "yield", "ppi", "OLED", "MiniLED", "MicroLED", "LCD", "喷墨打印", "蒸镀", "背板", "封装", "曝光", "掩膜版", "玻璃基板", "偏光片", "光学膜", "背光", "良率", "K-Display", "Display Week", "AWE", "XREAL", "Android XR"],
+    "non_topic_noise_keywords": ["AI infrastructure", "AI datacenter", "AI data center", "data center", "chip incentive", "CHIPS and Science Act", "semiconductor manufacturing", "semiconductor industry", "AI chips", "GPU", "accelerator", "人工智能基础设施", "数据中心", "芯片激励", "芯片补贴", "半导体制造", "半导体行业", "算力", "AI芯片"],
+    "business_signal_categories": ["display", "polarizer", "tech"]
+  },
+  "sources": ["OLED-Info", "Display Daily", "DSCC", "Counterpoint DSCC", "DisplaySpecifications", "TFTCentral", "FlatpanelsHD", "DisplayNinja", "MicroLED-Info", "SID Display Week", "LEDinside", "CINNO Research", "群智咨询 Sigmaintell", "洛图科技 RUNTO", "奥维睿沃 AVC Revo", "TrendForce 集邦咨询", "OFweek 显示", "电子发烧友 显示", "集微网 显示", "维科网 显示", "BOE 京东方", "TCL 华星", "Visionox 维信诺", "深天马", "LG Display", "Samsung Display", "Innolux 群创", "AUO 友达", "Nitto Denko 日东电工", "住友化学", "DigiTimes Display", "Nikkei Asia Electronics", "EE Times Display", "Display Polarizer News 监测"],
+  "scoring": {
+    "high_weight": {"偏光片": 9, "偏光板": 9, "偏光膜": 8, "光学膜": 7, "TAC膜": 7, "PVA膜": 7, "OLED": 7, "AMOLED": 6, "WOLED": 6, "QD-OLED": 7, "MiniLED": 6, "MicroLED": 8, "LCD": 5, "TFT": 5, "LTPO": 6, "面板": 6, "显示面板": 7, "产能": 6, "扩产": 6, "量产": 7, "稼动率": 7, "出货": 5, "涨价": 6, "降价": 5, "京东方": 7, "TCL华星": 7, "三星显示": 6, "LG Display": 6, "BOE": 6, "CSOT": 6, "polarizer": 8, "polarizing film": 8, "optical film": 7, "display panel": 7, "TV shipments": 5, "K-Display": 4, "AWE": 3, "XREAL": 4, "Android XR": 4},
+    "down_weight": {"wallpaper": -8, "手机壁纸": -8, "screenshot": -6, "电影": -4, "game trailer": -5},
+    "category_base_weight": {"display": 1.2, "polarizer": 1.25, "tech": 1.05},
+    "score_adjustments": [{"keywords": ["TV shipments", "TV出货", "K-Display", "AWE", "XREAL", "Android XR"], "bonus": 6}, {"keywords": ["偏光片", "偏光板", "polarizer"], "bonus": 8}]
+  },
+  "boards": {
+    "definitions": {
+      "a1_policy_supply": {"name": "A1 · 政策与供需", "parent": "A1 · 政策与供需", "keywords": ["政策", "补贴", "关税", "出口管制", "反倾销", "供需", "库存", "稼动率", "价格", "涨价", "降价", "policy", "tariff", "inventory", "utilization", "supply", "demand", "price"]},
+      "a2_polarizer_films": {"name": "A2 · 偏光片与光学膜", "parent": "A2 · 偏光片与光学膜", "keywords": ["偏光片", "偏光板", "偏光膜", "光学膜", "补偿膜", "TAC膜", "PVA膜", "三利谱", "杉金光电", "日东电工", "住友化学", "polarizer", "polariser", "polarizing film", "optical film"]},
+      "a3_panel_capacity": {"name": "A3 · 面板产能与厂商", "parent": "A3 · 面板产能与厂商", "keywords": ["面板厂", "产线", "扩产", "投产", "量产", "停产", "产能", "出货", "良率", "京东方", "TCL华星", "华星光电", "维信诺", "深天马", "惠科", "LG Display", "Samsung Display", "AUO", "Innolux", "panel maker", "capacity", "fab", "production line", "shipment"]},
+      "a4_oled_microled": {"name": "A4 · OLED/MiniLED/MicroLED", "parent": "A4 · OLED/MiniLED/MicroLED", "keywords": ["OLED", "AMOLED", "WOLED", "QD-OLED", "MiniLED", "MicroLED", "硅基OLED", "柔性OLED", "折叠屏", "蒸镀", "喷墨打印", "LTPO", "LTPS", "IGZO"]},
+      "a5_lcd_backlight": {"name": "A5 · LCD与背光模组", "parent": "A5 · LCD与背光模组", "keywords": ["LCD", "液晶", "TFT-LCD", "背光", "背光模组", "玻璃基板", "彩色滤光片", "显示器面板", "电视面板", "LCD panel", "backlight", "glass substrate"]},
+      "a6_applications": {"name": "A6 · 终端应用", "parent": "A6 · 终端应用", "keywords": ["电视", "显示器", "笔电", "平板", "手机", "车载显示", "AR", "VR", "XR", "穿戴", "电子纸", "TV", "monitor", "smartphone", "automotive display", "AR display", "VR display", "TV shipments", "K-Display", "AWE", "XREAL", "Android XR"]},
+      "a7_finance_mna": {"name": "A7 · 财报融资与并购", "parent": "A7 · 财报融资与并购", "keywords": ["财报", "营收", "利润", "亏损", "融资", "募资", "并购", "收购", "IPO", "上市", "订单", "资本开支", "earnings", "revenue", "funding", "acquisition", "investment"]},
+      "a8_media": {"name": "A8 · 媒体评论", "parent": "A8 · 媒体评论", "keywords": ["评论", "观点", "专栏", "解读", "分析", "访谈", "趋势", "预测", "研报", "opinion", "commentary", "analysis", "forecast", "report"]}
+    },
+    "order": [{"name": "A1 · 政策与供需", "ids": ["a1_policy_supply"]}, {"name": "A2 · 偏光片与光学膜", "ids": ["a2_polarizer_films"]}, {"name": "A3 · 面板产能与厂商", "ids": ["a3_panel_capacity"]}, {"name": "A4 · OLED/MiniLED/MicroLED", "ids": ["a4_oled_microled"]}, {"name": "A5 · LCD与背光模组", "ids": ["a5_lcd_backlight"]}, {"name": "A6 · 终端应用", "ids": ["a6_applications"]}, {"name": "A7 · 财报融资与并购", "ids": ["a7_finance_mna"]}, {"name": "A8 · 媒体评论", "ids": ["a8_media"]}],
+    "fallback_mapping": {"display": "a3_panel_capacity", "polarizer": "a2_polarizer_films", "economy": "a7_finance_mna", "finance": "a7_finance_mna", "tech": "a4_oled_microled", "politics": "a1_policy_supply"},
+    "default_board": "a8_media"
+  }
+}
