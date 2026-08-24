@@ -14,7 +14,13 @@ services:
       - NEWS_REPORT_DIR=/app/reports
       - NEWS_GENERATE_HTML_BRIEF=1
     volumes:
-      # persist uploaded data and generated reports on the host
-      - ./data:/app/data
-      - ./reports:/app/reports
+      # Named volumes: avoids bind-mounting host paths, which fails with
+      # "read-only file system" when the Docker daemon cannot write to the
+      # project directory (e.g. rootless docker on some mounts).
+      - news-data:/app/data
+      - news-reports:/app/reports
     restart: unless-stopped
+
+volumes:
+  news-data:
+  news-reports:
