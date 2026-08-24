@@ -1,11 +1,14 @@
 # Single-stage build: the Vue frontend is built on the dev machine
 # (`cd frontend && npm run build`, output -> static/) and committed to git,
 # so the server only ever needs ONE base image and no Node toolchain.
-FROM python:3.12-slim
+#
+# The base image is referenced by its full daocloud mirror domain so the
+# server does not need any registry-mirror config in /etc/docker/daemon.json.
+FROM docker.m.daocloud.io/library/python:3.12-slim
 
-# Use a China PyPI mirror when the server cannot reach pypi.org:
-#   PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple docker compose up -d --build
-ARG PIP_INDEX_URL=https://pypi.org/simple
+# China PyPI mirror is the default so pip install does not depend on pypi.org.
+# Override with: docker compose build --build-arg PIP_INDEX_URL=<index>
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 
 WORKDIR /app
 

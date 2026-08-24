@@ -2,10 +2,10 @@ services:
   news-analyzer:
     build:
       context: .
-      # 可传 PIP_INDEX_URL 指定镜像源，例如清华源：
-      #   PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple docker compose up -d --build
+      # 可传 PIP_INDEX_URL 覆盖 pip 源，默认使用清华源
+      #   PIP_INDEX_URL=https://pypi.org/simple docker compose up -d --build
       args:
-        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
     container_name: news-analyzer
     ports:
       - "8011:8011"
