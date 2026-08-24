@@ -13,7 +13,10 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: 'dist',
+    // Build straight into the repo-root static/ dir that FastAPI serves,
+    // so the production bundle can be committed for single-stage deploys.
+    outDir: '../static',
+    emptyOutDir: true,
     chunkSizeWarningLimit: 1600
   }
 })

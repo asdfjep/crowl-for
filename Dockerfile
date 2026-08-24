@@ -1,26 +1,18 @@
-# ---- Stage 1: build the Vue frontend ----
-FROM node:20-alpine AS frontend
-WORKDIR /app/frontend
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci --no-audit --no-fund
-COPY frontend/ ./
-RUN npm run build
-
-# ---- Stage 2: Python runtime serving API + static frontend ----
+# Single-stage build: the Vue frontend is built on the dev machine
+# (`cd frontend && npm run build`, output -> static/) and committed to git,
+# so the server only ever needs ONE base image and no Node toolchain.
 FROM python:3.12-slim
+
+# Use a China PyPI mirror when the server cannot reach pypi.org:
+#   PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple docker compose up -d --build
+ARG PIP_INDEX_URL=https://pypi.org/simple
+
 WORKDIR /app
 
-# Chinese fonts so PDF/report rendering never regresses in the container
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-noto-cjk \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -i "$PIP_INDEX_URL" -r requirements.txt
 
 COPY . .
-# Serve the built SPA as the static root of the FastAPI app
-COPY --from=frontend /app/frontend/dist ./static
 
 RUN mkdir -p /app/data /app/reports
 

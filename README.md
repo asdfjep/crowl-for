@@ -83,7 +83,8 @@ npm run build           # 产物输出到 frontend/dist
 
 ## Docker 部署（Linux）
 
-多阶段构建：`node:20-alpine` 构建前端 → `python:3.12-slim` 运行时统一托管 API 与静态页面。
+单阶段构建：前端在开发机上构建好后随仓库提交（`static/` 目录），服务器只需要拉取一个
+`python:3.12-slim` 基础镜像、无需 Node 工具链。
 
 ```bash
 docker compose up -d --build
@@ -91,7 +92,20 @@ docker compose up -d --build
 # 数据上传后写入 ./data，报告生成在 ./reports（挂载持久化）
 ```
 
-单独使用已有 Dockerfile：
+服务器无法访问 PyPI 时，可用国内镜像源构建：
+
+```bash
+PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple docker compose up -d --build
+```
+
+改动了前端后，在开发机重新构建并提交，服务器 `git pull` 后再重建即可：
+
+```bash
+cd frontend && npm run build   # 直接输出到仓库根目录 static/
+docker compose up -d --build   # （服务器上）
+```
+
+不使用 compose、直接构建镜像：
 
 ```bash
 docker build -t ai-news-analyzer .

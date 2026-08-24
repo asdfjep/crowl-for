@@ -4,6 +4,5 @@ __pycache__/
 *.pyc
 frontend/node_modules/
 frontend/dist/
-static/
 .claude/
 logs/*.log
