@@ -19,7 +19,9 @@ class BOECrawler(PlaywrightCrawler):
     async def fetch_news(self) -> List[NewsItem]:
         news_list = []
         # 忽略 HTTPS 错误
-        html = await self.fetch_with_browser(self.url, wait_until='networkidle', ignore_https_errors=True)
+        # 京东方官网有持续轮询请求，networkidle 永远等不到 → 会卡满 30s 超时。
+        # 改为 DOMContentLoaded 后即返回，避免把巡检拖成 error。
+        html = await self.fetch_with_browser(self.url, wait_until='domcontentloaded', ignore_https_errors=True)
         if not html:
             return news_list
 
