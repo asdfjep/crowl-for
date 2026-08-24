@@ -1,7 +1,28 @@
+<div align="center">
+
 # AI News Analyzer
 
-独立的新闻分析服务，与抓取模块（ai-news-service）完全解耦。内置 **Web 管理前端**（Vue 3），
-可在页面上运行分析、查看报告、上传数据、执行源巡检。
+统一新闻分析服务 + Vue 3 Web 管理前端
+
+去重 · 事件聚类 · 重要性评分 · A1-A8 板块分类 · 周报 / PDF / HTML 简报生成
+
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)]()
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)]()
+[![Vue](https://img.shields.io/badge/Vue-3.4-42b883?logo=vuedotjs&logoColor=white)]()
+[![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)]()
+
+</div>
+
+独立的新闻分析服务，与抓取模块完全解耦。分析结果既有 **命令行** 入口，也有内置的 **Web 管理前端**（Vue 3 + Element Plus + ECharts），可直接在页面上运行分析、查看报告、上传数据、执行源巡检。
+
+## 快速开始（Docker）
+
+```bash
+git clone https://github.com/asdfjep/crowl-for.git
+cd crowl-for
+docker compose up -d --build
+# 打开 http://<服务器>:8011
+```
 
 ## 功能
 
@@ -12,6 +33,20 @@
 - 综合报告生成（Markdown + PDF + HTML 简报）
 - 可选 LLM 润色（需配置 `llm_config.local.json`）
 - 支持主题：`ai` 人工智能 / `commercial_space` 商业航天 / `display_polarizer` 偏光板与显示
+
+## 分析管线
+
+```text
+读取新闻数据
+  -> 日期过滤（报告周期前 7 天）
+  -> 主题关键词过滤
+  -> 三级去重
+  -> 事件聚类
+  -> 重要性评分（0-100）
+  -> A1-A8 板块分类
+  -> 商情标注 / 数据源健康 / 趋势检测
+  -> 生成 Markdown / PDF / HTML 简报
+```
 
 ## Web 管理前端
 
@@ -53,7 +88,7 @@ npm run build           # 产物输出到 frontend/dist
 ```bash
 docker compose up -d --build
 # 打开 http://<服务器>:8011
-# 数据在上传后写入 ./data，报告生成在 ./reports（挂载持久化）
+# 数据上传后写入 ./data，报告生成在 ./reports（挂载持久化）
 ```
 
 单独使用已有 Dockerfile：
@@ -81,7 +116,22 @@ docker run -d -p 8011:8011 \
 
 未配置时分析自动回退为基础模式。
 
-### 说明与限制
+## API 一览
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/health` | 探活 |
+| POST | `/api/analyze` | 提交新闻 JSON，返回分析结果 |
+| GET | `/api/meta` | 服务信息、主题、目录、LLM 状态 |
+| GET | `/api/reports` | 报告列表（md / pdf / html 简报 / 巡检，含分类与主题） |
+| GET | `/api/reports/{name}` | 报告内容；html / pdf 直接流式返回 |
+| GET | `/api/data-files` | 数据文件列表 |
+| GET | `/api/data-files/{name}` | 数据文件元信息 + 预览 |
+| POST | `/api/data-files` | 保存一份新闻数据 |
+| POST | `/api/jobs` | 提交后台任务（`analyze` / `health`） |
+| GET | `/api/jobs` · `/api/jobs/{id}` | 任务列表 / 状态轮询 |
+
+## 说明与限制
 
 - 仓库本身不含爬虫服务。`run.py --refresh` 与「数据源巡检」依赖抓取服务（开发机上位于
   `~/.openclaw/workspace/.tmp_<topic>_news_service/`）；新服务器未部署抓取服务时，前端会给出明确提示，
