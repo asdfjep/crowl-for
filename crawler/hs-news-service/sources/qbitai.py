@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import List
 from xml.etree import ElementTree
 from .base import BaseCrawler, NewsItem, logger
+from .content_fetch import enrich_items
 
 
 class QbitaiCrawler(BaseCrawler):
@@ -25,6 +26,7 @@ class QbitaiCrawler(BaseCrawler):
         except Exception as e:
             logger.error(f"量子位 失败: {e}")
         news_list.sort(key=lambda x: x.publish_time or datetime.min, reverse=True)
+        await enrich_items(self, news_list)
         logger.info(f"量子位：{len(news_list)} 条")
         return news_list
 

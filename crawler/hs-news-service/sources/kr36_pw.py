@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import List
 from bs4 import BeautifulSoup
 from .playwright_base import PlaywrightCrawler, NewsItem
+from .content_fetch import enrich_items
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ class Kr36Crawler(PlaywrightCrawler):
         except Exception as e:
             logger.error(f"36Kr 解析失败: {e}")
         
+        await enrich_items(self, news_list, limit=8)
         return news_list
 
     def now(self):
