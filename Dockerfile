@@ -15,6 +15,21 @@ WORKDIR /app
 COPY requirements.txt requirements-crawler.txt ./
 RUN pip install --no-cache-dir -i "$PIP_INDEX_URL" -r requirements.txt -r requirements-crawler.txt
 
+# --- Playwright Chromium (for browser-rendered sources) --------------------
+# Chromium system libs come from apt; rewrite the Debian mirror to TUNA so the
+# install works from CN networks. The browser binary is downloaded from the
+# npmmirror CDN instead of the default Microsoft CDN (likewise often blocked).
+RUN sed -i 's@http://deb.debian.org@https://mirrors.tuna.tsinghua.edu.cn@g' \
+      /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list 2>/dev/null || true \
+ && apt-get update \
+ && python -m playwright install-deps chromium \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
+ENV PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
+RUN python -m playwright install chromium
+# ---------------------------------------------------------------------------
+
 COPY . .
 
 # Crawler service: the analyzer's run.py expects one under
