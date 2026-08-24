@@ -1,0 +1,129 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{% if action == 'add' %}添加订阅源{% else %}编辑订阅源{% endif %} - HS News 管理后台{% endblock %}
+
+{% set active_page = 'sources' %}
+
+{% block page_title %}{% if action == 'add' %}添加订阅源{% else %}编辑: {{ source.name }}{% endif %}{% endblock %}
+
+{% block page_actions %}
+<a href="/admin/sources" class="text-sm text-gray-500 hover:text-gray-700 transition">&larr; 返回列表</a>
+{% endblock %}
+
+{% block content %}
+<!-- 表单卡片 -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-200">
+    <form method="POST" class="p-6 lg:p-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- 名称 -->
+            <div class="md:col-span-2">
+                <label for="name" class="block text-sm font-medium text-gray-700 mb-1">
+                    源名称 <span class="text-red-500">*</span>
+                </label>
+                <input type="text" id="name" name="name" value="{{ source.name if source else '' }}" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                    placeholder="例如：SpaceNews">
+            </div>
+
+            <!-- URL -->
+            <div class="md:col-span-2">
+                <label for="url" class="block text-sm font-medium text-gray-700 mb-1">
+                    源 URL <span class="text-red-500">*</span>
+                </label>
+                <input type="url" id="url" name="url" value="{{ source.url if source else '' }}" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                    placeholder="https://example.com/news">
+            </div>
+
+            <!-- 源分类 -->
+            <div>
+                <label for="category" class="block text-sm font-medium text-gray-700 mb-1">
+                    源分类
+                </label>
+                <select id="category" name="category"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white">
+                    <option value="general" {% if not source or source.category == 'general' %}selected{% endif %}>通用 (general)</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.name }}" {% if source and source.category == cat.name %}selected{% endif %}>{{ cat.name }}</option>
+                    {% endfor %}
+                    <option value="finance" {% if source and source.category == 'finance' %}selected{% endif %}>金融 (finance)</option>
+                    <option value="aerospace" {% if source and source.category == 'aerospace' %}selected{% endif %}>航天 (aerospace)</option>
+                    <option value="ai" {% if source and source.category == 'ai' %}selected{% endif %}>人工智能 (ai)</option>
+                    <option value="polarizer" {% if source and source.category == 'polarizer' %}selected{% endif %}>偏光片 (polarizer)</option>
+                    <option value="display" {% if source and source.category == 'display' %}selected{% endif %}>显示 (display)</option>
+                    <option value="other" {% if source and source.category == 'other' %}selected{% endif %}>其他 (other)</option>
+                </select>
+            </div>
+
+            <!-- 爬虫类型 -->
+            <div>
+                <label for="crawler_type" class="block text-sm font-medium text-gray-700 mb-1">
+                    爬虫类型
+                </label>
+                <select id="crawler_type" name="crawler_type"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition bg-white">
+                    <option value="async" {% if not source or source.crawler_type == 'async' %}selected{% endif %}>Async (异步 HTTP)</option>
+                    <option value="playwright" {% if source and source.crawler_type == 'playwright' %}selected{% endif %}>Playwright (浏览器渲染)</option>
+                    <option value="html" {% if source and source.crawler_type == 'html' %}selected{% endif %}>HTML (静态解析)</option>
+                </select>
+                <p class="mt-1 text-xs text-gray-400">async 适用于常规网站，playwright 适用于 JS 渲染页面，html 适用于简单静态页</p>
+            </div>
+
+            <!-- 爬虫模块名 -->
+            <div>
+                <label for="crawler_module" class="block text-sm font-medium text-gray-700 mb-1">
+                    爬虫模块名 <span class="text-red-500">*</span>
+                </label>
+                <input type="text" id="crawler_module" name="crawler_module" value="{{ source.crawler_module if source else '' }}" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                    placeholder="例如：spacenews_pw">
+                <p class="mt-1 text-xs text-gray-400">sources 目录下的 Python 模块名（不含 .py 后缀）</p>
+            </div>
+
+            <!-- 爬取间隔 -->
+            <div>
+                <label for="crawl_interval" class="block text-sm font-medium text-gray-700 mb-1">
+                    爬取间隔（秒）
+                </label>
+                <input type="number" id="crawl_interval" name="crawl_interval" value="{{ source.crawl_interval if source else 1800 }}" min="60"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                    placeholder="1800">
+                <p class="mt-1 text-xs text-gray-400">建议值: 900-3600 秒</p>
+            </div>
+
+            <!-- 超时时间 -->
+            <div>
+                <label for="timeout" class="block text-sm font-medium text-gray-700 mb-1">
+                    超时时间（秒）
+                </label>
+                <input type="number" id="timeout" name="timeout" value="{{ source.timeout if source else 45 }}" min="10"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                    placeholder="45">
+                <p class="mt-1 text-xs text-gray-400">单次爬取最大超时时间</p>
+            </div>
+
+            <!-- 启用 -->
+            <div class="md:col-span-2 flex items-start">
+                <label class="flex items-center cursor-pointer">
+                    <input type="checkbox" id="is_active" name="is_active" {% if not source or source.is_active %}checked{% endif %}
+                        class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                    <span class="ml-2 text-sm font-medium text-gray-700">启用此数据源</span>
+                </label>
+            </div>
+            <div class="md:col-span-2">
+                <p class="text-xs text-gray-400 -mt-4 ml-6">禁用后该源将不会参与定时爬取</p>
+            </div>
+        </div>
+
+        <!-- 表单操作按钮 -->
+        <div class="mt-8 pt-6 border-t border-gray-200 flex justify-end gap-3">
+            <a href="/admin/sources" class="px-6 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                取消
+            </a>
+            <button type="submit" class="px-6 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-sm">
+                {% if action == 'add' %}添加数据源{% else %}保存修改{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

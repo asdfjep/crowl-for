@@ -1,0 +1,18 @@
+[Unit]
+Description=HS News Crawler Service
+After=network.target hs-news-analyzer.service
+
+[Service]
+Type=simple
+User=hsnews
+WorkingDirectory=/opt/hs-news-service
+ExecStart=/opt/hs-news-service/venv/bin/python run.py --interval 60
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/hs-news-crawler.log
+StandardError=append:/var/log/hs-news-crawler.log
+Environment=TZ=Asia/Shanghai
+Environment=ANALYZER_URL=http://localhost:8001/api/analyze
+
+[Install]
+WantedBy=multi-user.target

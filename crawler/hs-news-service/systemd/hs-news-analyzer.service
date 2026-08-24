@@ -1,0 +1,17 @@
+[Unit]
+Description=HS News Analyzer Service
+After=network.target
+
+[Service]
+Type=simple
+User=hsnews
+WorkingDirectory=/opt/hs-news-analyzer
+ExecStart=/opt/hs-news-analyzer/venv/bin/python server.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/hs-news-analyzer.log
+StandardError=append:/var/log/hs-news-analyzer.log
+Environment=TZ=Asia/Shanghai
+
+[Install]
+WantedBy=multi-user.target

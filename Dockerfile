@@ -12,10 +12,22 @@ ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -i "$PIP_INDEX_URL" -r requirements.txt
+COPY requirements.txt requirements-crawler.txt ./
+RUN pip install --no-cache-dir -i "$PIP_INDEX_URL" -r requirements.txt -r requirements-crawler.txt
 
 COPY . .
+
+# Crawler service: the analyzer's run.py expects one under
+#   ~/.openclaw/workspace/.tmp_<topic>_news_service/<topic>-news-service
+# All topic paths symlink to the single vendored crawler
+# (crawler/hs-news-service); per-topic filtering happens inside the analyzer.
+RUN mkdir -p \
+      /root/.openclaw/workspace/.tmp_ai_news_service \
+      /root/.openclaw/workspace/.tmp_commercial_space_news_service \
+      /root/.openclaw/workspace/.tmp_display_polarizer_news_service \
+ && ln -sf /app/crawler/hs-news-service /root/.openclaw/workspace/.tmp_ai_news_service/ai-news-service \
+ && ln -sf /app/crawler/hs-news-service /root/.openclaw/workspace/.tmp_commercial_space_news_service/commercial-space-news-service \
+ && ln -sf /app/crawler/hs-news-service /root/.openclaw/workspace/.tmp_display_polarizer_news_service/display-polarizer-news-service
 
 RUN mkdir -p /app/data /app/reports
 

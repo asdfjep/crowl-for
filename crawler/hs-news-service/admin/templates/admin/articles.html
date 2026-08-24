@@ -1,0 +1,124 @@
+{% extends "admin/base.html" %}
+
+{% block title %}文章列表 - HS 管理后台{% endblock %}
+
+{% block page_title %}文章列表{% endblock %}
+
+{% block content %}
+<!-- Filter Bar -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+    <form method="GET" action="/admin/articles" class="flex items-center gap-4">
+        <div class="flex-1 max-w-xs">
+            <label for="category_filter" class="block text-sm font-medium text-gray-700 mb-1">按分类筛选</label>
+            <select id="category_filter" name="category" onchange="this.form.submit()"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-white">
+                <option value="">全部分类</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}" {% if selected_category == cat.id|string %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex-1 max-w-xs">
+            <label for="search" class="block text-sm font-medium text-gray-700 mb-1">搜索标题</label>
+            <input type="text" id="search" name="q" value="{{ search_query or '' }}" placeholder="输入关键词..."
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+        </div>
+        <div class="self-end">
+            <button type="submit"
+                    class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition shadow-sm">筛选</button>
+            {% if selected_category or search_query %}
+            <a href="/admin/articles"
+               class="ml-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition inline-block">重置</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<!-- Articles Table -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="px-6 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">标题</th>
+                <th class="px-6 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">来源</th>
+                <th class="px-6 py-3.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">分类</th>
+                <th class="px-6 py-3.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">严重程度</th>
+                <th class="px-6 py-3.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">时间</th>
+                <th class="px-6 py-3.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">操作</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+            {% for article in articles %}
+            <tr class="hover:bg-gray-50 transition">
+                <td class="px-6 py-4">
+                    <a href="{{ article.url }}" target="_blank" class="font-medium text-blue-600 hover:text-blue-800 line-clamp-2 max-w-md block">
+                        {{ article.title }}
+                    </a>
+                </td>
+                <td class="px-6 py-4">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                        {{ article.source_name or article.source }}
+                    </span>
+                </td>
+                <td class="px-6 py-4 text-center">
+                    <span class="text-gray-700">{{ article.category_name or '-' }}</span>
+                </td>
+                <td class="px-6 py-4 text-center">
+                    {% set sev = article.severity | default('low') %}
+                    {% if sev == 'high' or sev == 'critical' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700">高</span>
+                    {% elif sev == 'medium' or sev == 'normal' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-50 text-yellow-700">中</span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">低</span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 text-center text-gray-500 text-xs">
+                    {{ article.created_at.strftime('%Y-%m-%d %H:%M') if article.created_at else '-' }}
+                </td>
+                <td class="px-6 py-4 text-center">
+                    <form method="POST" action="/admin/articles/delete/{{ article.id }}"
+                          onsubmit="return confirm('确定要删除这篇文章吗？');">
+                        <button type="submit"
+                                class="text-red-600 hover:text-red-800 text-xs font-medium transition">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" class="px-6 py-12 text-center text-gray-400">暂无文章数据</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if pagination and pagination.pages > 1 %}
+<div class="mt-6 flex items-center justify-between">
+    <p class="text-sm text-gray-500">共 {{ pagination.total }} 条记录，第 {{ pagination.page }}/{{ pagination.pages }} 页</p>
+    <div class="flex gap-1">
+        {% if pagination.has_prev %}
+        <a href="?page={{ pagination.prev_num }}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
+           class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">上一页</a>
+        {% endif %}
+        {% for p in pagination.iter_pages() %}
+            {% if p %}
+                {% if p == pagination.page %}
+                <span class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg">{{ p }}</span>
+                {% else %}
+                <a href="?page={{ p }}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
+                   class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">{{ p }}</a>
+                {% endif %}
+            {% else %}
+            <span class="px-2 py-1.5 text-sm text-gray-400">...</span>
+            {% endif %}
+        {% endfor %}
+        {% if pagination.has_next %}
+        <a href="?page={{ pagination.next_num }}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"
+           class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">下一页</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

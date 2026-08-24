@@ -9,4 +9,6 @@ logs
 backups
 configs/topics/backups
 llm_config.local.json
+crawler/hs-news-service/venv
+crawler/hs-news-service/data
 *.log

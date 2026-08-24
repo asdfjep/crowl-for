@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}HS News 管理后台 - 首页{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- 页面标题 -->
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p class="mt-1 text-sm text-gray-500">新闻服务管理概览</p>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- 总文章数 -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">总文章数</p>
+                    <p class="mt-2 text-3xl font-bold text-gray-900">{{ stats.total_articles }}</p>
+                </div>
+                <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-blue-100">
+                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据源数 -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">数据源数</p>
+                    <p class="mt-2 text-3xl font-bold text-gray-900">{{ stats.total_sources }}</p>
+                </div>
+                <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-purple-100">
+                    <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- 活跃源数 -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">活跃源数</p>
+                    <p class="mt-2 text-3xl font-bold text-green-600">{{ stats.active_sources }}</p>
+                </div>
+                <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-green-100">
+                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 最新文章列表 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-gray-900">最新文章</h2>
+            <a href="/admin/articles" class="text-sm text-blue-600 hover:text-blue-800 font-medium">查看全部 →</a>
+        </div>
+        <div class="divide-y divide-gray-200">
+            {% if articles %}
+                {% for article in articles %}
+                <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1 min-w-0">
+                            <a href="{{ article.url }}" target="_blank" class="text-sm font-medium text-gray-900 hover:text-blue-600 truncate">
+                                {{ article.title }}
+                            </a>
+                            <div class="mt-1 flex items-center space-x-3 text-xs text-gray-500">
+                                <span>{{ article.source_name }}</span>
+                                <span>·</span>
+                                <span>{{ article.publish_time | datetime }}</span>
+                                {% if article.category %}
+                                <span>·</span>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    {{ article.category }}
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="px-6 py-12 text-center">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                    </svg>
+                    <p class="mt-2 text-sm text-gray-500">暂无文章</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,229 @@
+{% extends "admin/base.html" %}
+
+{% block title %}仪表盘 - HS News 管理后台{% endblock %}
+
+{% set active_page = 'dashboard' %}
+
+{% block page_title %}管理仪表盘{% endblock %}
+
+{% block content %}
+<!-- 统计概览卡片 -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- 总文章数 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-500">总文章数</p>
+                <p class="mt-2 text-3xl font-bold text-gray-900">{{ stats.total_articles }}</p>
+            </div>
+            <div class="p-3 bg-blue-100 rounded-lg">
+                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- 总源数 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-500">数据源总数</p>
+                <p class="mt-2 text-3xl font-bold text-gray-900">{{ stats.total_sources }}</p>
+            </div>
+            <div class="p-3 bg-purple-100 rounded-lg">
+                <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- 活跃源 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-500">活跃数据源</p>
+                <p class="mt-2 text-3xl font-bold text-green-600">{{ stats.active_sources }}</p>
+            </div>
+            <div class="p-3 bg-green-100 rounded-lg">
+                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分类数 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-500">分类数量</p>
+                <p class="mt-2 text-3xl font-bold text-orange-600">{{ stats.total_categories }}</p>
+            </div>
+            <div class="p-3 bg-orange-100 rounded-lg">
+                <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 数据源状态 & 分类分布 -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <!-- 数据源状态表格 -->
+    <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-900">数据源状态</h2>
+            <a href="/admin/sources" class="text-sm text-indigo-600 hover:text-indigo-800 transition">管理全部 &rarr;</a>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">名称</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">状态</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">上次爬取</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">文章数</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">错误信息</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for src in sources %}
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="px-4 py-3 font-medium text-gray-900">{{ src.name }}</td>
+                        <td class="px-4 py-3">
+                            {% if src.is_active %}
+                                {% if src.last_status == 'success' %}
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">正常</span>
+                                {% elif src.last_status == 'failed' %}
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">异常</span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">待爬取</span>
+                                {% endif %}
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">已禁用</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-gray-500">
+                            {% if src.last_crawl_time %}
+                                {{ src.last_crawl_time | datetime }}
+                            {% else %}
+                                <span class="text-gray-400">尚未爬取</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-gray-700">{{ src.total_articles }}</td>
+                        <td class="px-4 py-3 text-gray-500 max-w-xs truncate" title="{{ src.error_message }}">
+                            {% if src.error_message %}
+                            <span class="text-red-600">{{ src.error_message[:30] }}{% if src.error_message|length > 30 %}...{% endif %}</span>
+                            {% else %}
+                            <span class="text-green-600">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not sources %}
+                    <tr>
+                        <td colspan="5" class="px-4 py-8 text-center text-gray-500">暂无数据源</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 分类文章分布 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">分类文章分布</h2>
+        </div>
+        <div class="p-6">
+            {% if cat_counts %}
+            <div class="space-y-4">
+                {% for category, count in cat_counts.items() %}
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="font-medium text-gray-700">{{ category }}</span>
+                        <span class="text-gray-500">{{ count }} 篇</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        {% set total = stats.total_articles %}
+                        {% if total > 0 %}
+                            {% set pct = (count * 100 / total) | int %}
+                        {% else %}
+                            {% set pct = 0 %}
+                        {% endif %}
+                        {% if category == '航天' %}
+                        <div class="bg-blue-500 h-2.5 rounded-full" style="width: {{ pct }}%"></div>
+                        {% elif category == '偏光片' %}
+                        <div class="bg-purple-500 h-2.5 rounded-full" style="width: {{ pct }}%"></div>
+                        {% elif category == '人工智能' %}
+                        <div class="bg-green-500 h-2.5 rounded-full" style="width: {{ pct }}%"></div>
+                        {% elif category == '杉杉集团' %}
+                        <div class="bg-yellow-500 h-2.5 rounded-full" style="width: {{ pct }}%"></div>
+                        {% else %}
+                        <div class="bg-gray-400 h-2.5 rounded-full" style="width: {{ pct }}%"></div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-center text-gray-500 py-8">暂无分类数据</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- 最近爬取日志 -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-200">
+    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+        <h2 class="text-lg font-semibold text-gray-900">最近爬取日志</h2>
+        <a href="/admin/logs" class="text-sm text-indigo-600 hover:text-indigo-800 transition">查看全部 &rarr;</a>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left font-medium text-gray-500">时间</th>
+                    <th class="px-4 py-3 text-left font-medium text-gray-500">数据源</th>
+                    <th class="px-4 py-3 text-left font-medium text-gray-500">状态</th>
+                    <th class="px-4 py-3 text-left font-medium text-gray-500">发现/新增</th>
+                    <th class="px-4 py-3 text-left font-medium text-gray-500">耗时</th>
+                    <th class="px-4 py-3 text-left font-medium text-gray-500">错误信息</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for log in logs %}
+                <tr class="hover:bg-gray-50 transition">
+                    <td class="px-4 py-3 text-gray-500">{{ log.created_at | datetime }}</td>
+                    <td class="px-4 py-3 font-medium text-gray-900">{{ log.source_name }}</td>
+                    <td class="px-4 py-3">
+                        {% if log.status == 'success' %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">成功</span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">失败</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-gray-700">{{ log.articles_found }} / {{ log.articles_new }}</td>
+                    <td class="px-4 py-3 text-gray-500">{{ "%.1f" | format(log.duration_seconds) }}s</td>
+                    <td class="px-4 py-3 text-gray-500 max-w-xs truncate" title="{{ log.error_message }}">
+                        {% if log.error_message %}
+                        <span class="text-red-600">{{ log.error_message[:40] }}{% if log.error_message|length > 40 %}...{% endif %}</span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not logs %}
+                <tr>
+                    <td colspan="6" class="px-4 py-8 text-center text-gray-500">暂无爬取日志</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
