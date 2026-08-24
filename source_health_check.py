@@ -199,6 +199,17 @@ async def _run() -> Dict[str, Any]:
     scheduler = Scheduler(push_url=None)
     await scheduler.load_sources()
 
+    # Skip sources that are unreachable / anti-bot-blocked from this network
+    # so they do not pollute every health report. Configure via
+    # NEWS_HEALTH_SKIP="module1,module2" (empty = monitor every source).
+    skip = {s.strip() for s in os.getenv("NEWS_HEALTH_SKIP", "").split(",") if s.strip()}
+    if skip:
+        unknown = skip - set(scheduler.sources)
+        if unknown:
+            print(f"[health] NEWS_HEALTH_SKIP ignores unknown modules: {sorted(unknown)}", file=sys.stderr)
+        scheduler.sources = {k: v for k, v in scheduler.sources.items() if k not in skip}
+        print(f"[health] skipping modules: {sorted(skip & set(scheduler.sources) or skip)}", file=sys.stderr)
+
     timeout = int(os.getenv("NEWS_HEALTH_SOURCE_TIMEOUT", "30"))
     retries = int(os.getenv("NEWS_HEALTH_RETRIES", "1"))
     stale_days = int(os.getenv("NEWS_HEALTH_STALE_DAYS", "7"))
