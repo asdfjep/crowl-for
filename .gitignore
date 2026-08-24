@@ -1,1 +1,9 @@
 llm_config.local.json
+.venv/
+__pycache__/
+*.pyc
+frontend/node_modules/
+frontend/dist/
+static/
+.claude/
+logs/*.log

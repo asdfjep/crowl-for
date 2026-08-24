@@ -1,0 +1,15 @@
+services:
+  news-analyzer:
+    build: .
+    container_name: news-analyzer
+    ports:
+      - "8011:8011"
+    environment:
+      - NEWS_DATA_DIR=/app/data
+      - NEWS_REPORT_DIR=/app/reports
+      - NEWS_GENERATE_HTML_BRIEF=1
+    volumes:
+      # persist uploaded data and generated reports on the host
+      - ./data:/app/data
+      - ./reports:/app/reports
+    restart: unless-stopped

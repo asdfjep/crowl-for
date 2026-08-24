@@ -1,5 +1,6 @@
 # Analysis dependencies
 jieba==0.42.1
+reportlab>=4.0.4
 
 # Server (optional)
 fastapi==0.115.0

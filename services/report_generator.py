@@ -216,6 +216,7 @@ class ReportGenerator:
             ("MicrosoftYaHei", Path("C:/Windows/Fonts/msyh.ttc"), "MicrosoftYaHeiBold", Path("C:/Windows/Fonts/msyhbd.ttc")),
             ("SimHei", Path("C:/Windows/Fonts/simhei.ttf"), "SimHei", Path("C:/Windows/Fonts/simhei.ttf")),
             ("NotoSansSC", Path("C:/Windows/Fonts/NotoSansSC-VF.ttf"), "NotoSansSC", Path("C:/Windows/Fonts/NotoSansSC-VF.ttf")),
+            ("NotoSansCJK", Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"), "NotoSansCJK-Bold", Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc")),
         ]
         for font_name, font_path, bold_font_name, bold_font_path in font_candidates:
             if not font_path.exists():
