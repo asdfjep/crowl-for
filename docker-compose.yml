@@ -13,6 +13,9 @@ services:
       - NEWS_DATA_DIR=/app/data
       - NEWS_REPORT_DIR=/app/reports
       - NEWS_GENERATE_HTML_BRIEF=1
+      # Health check: fail-fast on unreachable sources instead of doubling the
+      # timeout with a retry (a 60s-stuck source used to cost ~122s per run).
+      - NEWS_HEALTH_RETRIES=0
     volumes:
       # Named volumes: avoids bind-mounting host paths, which fails with
       # "read-only file system" when the Docker daemon cannot write to the
