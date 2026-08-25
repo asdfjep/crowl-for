@@ -216,6 +216,12 @@ def run_analyze(payload: Dict[str, Any]) -> Dict[str, Any]:
     # Generate the human-readable HTML brief alongside the markdown report.
     os.environ["NEWS_GENERATE_HTML_BRIEF"] = "1"
 
+    # Apply the LLM config saved in the web 「系统设置」 so every LLM need
+    # (weekly-report polish, title translation) uses the same endpoint.
+    from services.llm_config import apply_llm_env
+
+    apply_llm_env()
+
     if use_llm:
         for key, value in LLM_ENV_DEFAULTS.items():
             os.environ.setdefault(key, value)

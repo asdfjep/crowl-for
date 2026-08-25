@@ -254,6 +254,101 @@ async def meta():
     }
 
 
+class LlmConfigRequest(BaseModel):
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    timeout: Optional[int] = None
+
+
+def _mask_key(key: str) -> str:
+    if not key:
+        return ""
+    if len(key) <= 8:
+        return "****"
+    return key[:4] + "…" + key[-4:]
+
+
+@app.get("/api/llm-config")
+async def get_llm_config():
+    """返回当前 LLM 配置（api_key 脱敏）。"""
+    from services.llm_config import apply_llm_env, load_config
+
+    apply_llm_env()
+    cfg = load_config()
+    key = cfg.get("api_key") or os.getenv("NEWS_LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+    return {
+        "configured": bool(cfg.get("base_url") and key),
+        "base_url": cfg.get("base_url") or os.getenv("NEWS_LLM_BASE_URL") or "https://api.openai.com/v1",
+        "model": cfg.get("model") or os.getenv("NEWS_LLM_MODEL") or "gpt-4o-mini",
+        "timeout": cfg.get("timeout") or 60,
+        "api_key_set": bool(key),
+        "api_key_masked": _mask_key(key),
+    }
+
+
+@app.put("/api/llm-config")
+async def update_llm_config(req: LlmConfigRequest):
+    """保存 LLM 配置到数据目录并生效（api_key 留空表示沿用已有的）。"""
+    from services.llm_config import apply_llm_env, load_config, save_config
+
+    existing = load_config()
+    api_key = str(req.api_key).strip() if req.api_key else existing.get("api_key") or ""
+    cfg = {
+        "api_key": api_key,
+        "base_url": (req.base_url or existing.get("base_url") or "").strip(),
+        "model": (req.model or existing.get("model") or "").strip(),
+        "timeout": int(req.timeout or existing.get("timeout") or 60),
+    }
+    if not cfg["base_url"] or not cfg["api_key"]:
+        raise HTTPException(status_code=400, detail="base_url 和 api_key 不能同时为空")
+    path = save_config(cfg)
+    apply_llm_env()
+    return {
+        "ok": True,
+        "path": str(path),
+        "configured": True,
+        "api_key_masked": _mask_key(cfg["api_key"]),
+    }
+
+
+@app.post("/api/llm-config/test")
+async def test_llm_config(req: Optional[LlmConfigRequest] = None):
+    """用请求中的候选配置（可先测再保存）或当前配置做一次连通性测试。"""
+    from services.llm_config import apply_llm_env, chat_completion
+    from services.llm_config import _ENV_MAP  # noqa
+
+    saved = None
+    if req is not None:
+        from services.llm_config import load_config
+
+        existing = load_config()
+        saved = {
+            "base_url": os.getenv("NEWS_LLM_BASE_URL"),
+            "api_key": os.getenv("NEWS_LLM_API_KEY"),
+            "model": os.getenv("NEWS_LLM_MODEL"),
+        }
+        api_key = str(req.api_key).strip() if req.api_key else existing.get("api_key") or ""
+        base_url = (req.base_url or existing.get("base_url") or "").strip()
+        model = (req.model or existing.get("model") or "").strip()
+        os.environ["NEWS_LLM_API_KEY"] = api_key
+        os.environ["NEWS_LLM_BASE_URL"] = base_url or "https://api.openai.com/v1"
+        os.environ["NEWS_LLM_MODEL"] = model or "gpt-4o-mini"
+    else:
+        apply_llm_env()
+
+    try:
+        reply = chat_completion("请仅回复两个字：成功", system=None, max_tokens=8)
+        return {"ok": True, "reply": reply}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+    finally:
+        if saved is not None:
+            os.environ["NEWS_LLM_API_KEY"] = saved["api_key"] or ""
+            os.environ["NEWS_LLM_BASE_URL"] = saved["base_url"] or ""
+            os.environ["NEWS_LLM_MODEL"] = saved["model"] or ""
+
+
 @app.get("/api/reports")
 async def list_reports():
     """列出已有报告"""

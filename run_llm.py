@@ -87,6 +87,11 @@ os.environ.setdefault("NEWS_LLM_BOARD_MAX_ITEMS", "5")
 os.environ.setdefault("NEWS_LLM_BOARD_CANDIDATE_ITEMS", "24")
 os.environ.setdefault("NEWS_REPORT_VARIANT", "llm")
 
+# 统一使用「系统设置」里持久化的 LLM 配置（若存在），与 Web 端一致。
+from services.llm_config import apply_llm_env
+
+apply_llm_env()
+
 from services.analyzer_llm import NewsAnalyzer
 
 

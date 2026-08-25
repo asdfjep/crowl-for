@@ -65,6 +65,18 @@ export function analyzeDirect(payload) {
   return http.post('/analyze', payload)
 }
 
+export function getLlmConfig() {
+  return http.get('/llm-config')
+}
+
+export function saveLlmConfig(payload) {
+  return http.put('/llm-config', payload)
+}
+
+export function testLlmConfig(payload, baseUrl) {
+  return http.post('/llm-config/test', payload, { baseURL: baseUrl || '/api', timeout: 30000 })
+}
+
 export function downloadText(name, content) {
   const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)

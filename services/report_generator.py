@@ -428,20 +428,32 @@ class ReportGenerator:
             placeholders[placeholder] = original
             masked = pattern.sub(placeholder, masked)
 
-        try:
-            translated = self._request_google_translation(masked, source_lang='en')
-        except Exception as exc:
-            self._title_translation_failures += 1
-            logger.warning(
-                "Title translation failed (%s/%s): %s",
-                self._title_translation_failures,
-                self._translation_max_failures,
-                exc,
-            )
-            if self._title_translation_failures >= self._translation_max_failures:
-                self._title_translation_disabled_for_run = True
-                logger.warning("Machine title translation disabled for the rest of this run")
-            return None
+        translated = None
+        # 优先用「系统设置」里配置的 LLM 翻译标题（同一个 LLM，不依赖 Google）
+        if os.getenv("NEWS_LLM_API_KEY") or os.getenv("OPENAI_API_KEY"):
+            try:
+                from services.llm_config import translate_title as _llm_translate
+
+                translated = _llm_translate(masked)
+            except Exception as exc:
+                logger.info("LLM title translation unavailable (%s), falling back to machine translation", exc)
+                translated = None
+
+        if not translated:
+            try:
+                translated = self._request_google_translation(masked, source_lang='en')
+            except Exception as exc:
+                self._title_translation_failures += 1
+                logger.warning(
+                    "Title translation failed (%s/%s): %s",
+                    self._title_translation_failures,
+                    self._translation_max_failures,
+                    exc,
+                )
+                if self._title_translation_failures >= self._translation_max_failures:
+                    self._title_translation_disabled_for_run = True
+                    logger.warning("Machine title translation disabled for the rest of this run")
+                return None
 
         for placeholder, term in placeholders.items():
             translated = translated.replace(placeholder, term)
