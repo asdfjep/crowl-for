@@ -3296,8 +3296,35 @@ class ReportGenerator:
             return '暂无摘要'
 
         local_summary = self._compress_summary_locally(source_text, max_chars=max_len)
+        # 簇级摘要（TOP 事件 / 周报速览 / 板块 TOP5）也必须走配置的 LLM 翻成中文，
+        # 否则这些章节永远是本地压缩的英文摘要。
+        polished = self._polish_cluster_summary_with_llm(cluster, local_summary, max_len)
+        if polished:
+            local_summary = polished
+        else:
+            self._llm_polish_stats["fallback"] += 1
         self._cluster_summary_cache[key] = local_summary
         return local_summary
+
+    def _polish_cluster_summary_with_llm(self, cluster: Dict[str, Any], draft_summary: str, max_len: int) -> Optional[str]:
+        """把事件簇的组织性摘要也交给配置的 LLM 翻译/改写为中文（收益覆盖 TOP 事件等章节）。"""
+        lead_item = self._cluster_lead_item(cluster) or {}
+        cluster_item = {
+            "title": self._normalize_summary_text(cluster.get("representative_title", "")),
+            "summary": draft_summary,
+            "content": self._cluster_summary_source(cluster),
+            "source": (lead_item.get("source") or (cluster.get("sources") or [""])[0] or ""),
+            "publishTime": lead_item.get("publishTime") or "",
+        }
+        title = cluster_item["title"]
+        draft_title = self._display_title(title) if title else title
+        try:
+            result = self._polish_article_with_llm(cluster_item, draft_title, draft_summary, max_len)
+            if result and result.get("summary"):
+                return result["summary"]
+        except Exception as exc:
+            logger.warning("Cluster LLM polish failed: %s", exc)
+        return None
 
     def _cluster_lead_item(self, cluster: Dict[str, Any]) -> Dict[str, Any]:
         """Pick the most representative article for a cluster."""
