@@ -20,11 +20,11 @@ services:
       # Health check: fail-fast on unreachable sources instead of doubling the
       # timeout with a retry (a 60s-stuck source used to cost ~122s per run).
       - NEWS_HEALTH_RETRIES=0
-      # Sources that are unreachable / anti-bot-blocked from this server's
-      # network (verge=timeout, boe=500 URL, aibusiness=403, spacenews=Cloudflare,
-      # lgdisplay=JS SPA). Remove them from the list to track again, e.g. on a
-      # network with direct access.
-      - NEWS_HEALTH_SKIP=conflict_events,boe,aibusiness,spacenews,lgdisplay
+      # The old unreachable sources (TheVerge/BOE/SpaceNews/AIBusiness/LGDisplay)
+      # were replaced by reachable RSS feeds (sources/extra_feeds.py), so the
+      # skip list stays empty. If an RSS feed turns out unreachable on this
+      # network, add its key here or drop it from EXTRA_FEEDS.
+      - NEWS_HEALTH_SKIP=
     volumes:
       # Named volumes: avoids bind-mounting host paths, which fails with
       # "read-only file system" when the Docker daemon cannot write to the

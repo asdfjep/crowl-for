@@ -60,6 +60,9 @@ from sources.spacenews_pw import SpaceNewsCrawler
 from sources.aibusiness import AIBusinessCrawler
 from sources.lgdisplay import LGDisplayCrawler
 
+# 可替换源：服务器可达的公开 RSS/Atom Feed（按主题补齐内容）
+from sources.extra_feeds import EXTRA_CRAWLERS
+
 # 爬虫模块映射
 CRAWLER_MAP = {
     "thsnews": ThsnewsCrawler,
@@ -132,13 +135,17 @@ class Scheduler:
             session.close()
 
     def _load_sources_hardcoded(self):
-        """硬编码加载（向后兼容）"""
+        """硬编码加载（向后兼容）：仅加载本服务器可达的源。
+
+        不可达/被反爬的源（conflict_events=TheVerge、boe、spacenews、aibusiness、
+        lgdisplay）从默认清单移除，改为 EXTRA_CRAWLERS 里可达的 RSS 替代源。
+        需要重新启用某个源时，通过管理后台写库即可。
+        """
         self.sources = {
             "thsnews": ThsnewsCrawler(),
             "aerospace": AerospaceCrawler(),
             "ai_news": AINewsCrawler(),
             "polarizer": PolarizerCrawler(),
-            "conflict_events": ConflictEventsCrawler(),
             "financial_markets": FinancialMarketsCrawler(),
             "cls": CLSCrawler(),
             "displaydaily": DisplayDailyCrawler(),
@@ -154,11 +161,9 @@ class Scheduler:
             "qbitai": QbitaiCrawler(),
             "ofweek": OFweekCrawler(),
             "36kr": Kr36Crawler(),
-            "boe": BOECrawler(),
-            "spacenews": SpaceNewsCrawler(),
-            "aibusiness": AIBusinessCrawler(),
-            "lgdisplay": LGDisplayCrawler(),
         }
+        # 追加按主题挑选的替代 RSS 源
+        self.sources.update(EXTRA_CRAWLERS)
 
     async def fetch_all_news(self) -> List[BaseNewsItem]:
         all_news = []
