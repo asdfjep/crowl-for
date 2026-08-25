@@ -228,9 +228,13 @@ def _safe_report_path(name: str) -> Optional[Path]:
 
 @app.get("/api/meta")
 async def meta():
+    from services.llm_config import load_config
+
     topics = list_topics_config()
-    llm_ready = (Path(__file__).parent / "llm_config.local.json").exists() or bool(
-        os.getenv("NEWS_LLM_API_KEY")
+    llm_cfg = load_config()
+    llm_ready = bool(
+        llm_cfg.get("base_url")
+        and (llm_cfg.get("api_key") or os.getenv("NEWS_LLM_API_KEY") or os.getenv("OPENAI_API_KEY"))
     )
     reports = _scan_reports(limit=10000)
     counts = {}
