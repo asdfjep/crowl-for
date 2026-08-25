@@ -42,6 +42,36 @@ const filtered = computed(() => {
   })
 })
 
+const CATEGORY_ORDER = ['weekly_md', 'weekly_pdf', 'brief_html', 'daily_md', 'daily_pdf', 'health_md', 'health_json']
+
+const groups = computed(() => {
+  const byGroup = {}
+  for (const r of filtered.value) {
+    (byGroup[r.group] = byGroup[r.group] || []).push(r)
+  }
+  const arr = Object.values(byGroup)
+  for (const g of arr) {
+    g.sort((a, b) => {
+      const ai = CATEGORY_ORDER.indexOf(a.category)
+      const bi = CATEGORY_ORDER.indexOf(b.category)
+      if (ai !== bi) return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+      return b.modified.localeCompare(a.modified)
+    })
+  }
+  arr.sort((a, b) => b[0].modified.localeCompare(a[0].modified))
+  return arr.map(g => ({ group: g[0].group, files: g, newest: g[0].modified }))
+})
+
+function groupLabel(g) {
+  const w = g.match(/^(.+?)_weekly_(.+)$/)
+  if (w) return `周报批次 ${w[1]} · ${w[2]}`
+  const d = g.match(/^daily_(.+)$/)
+  if (d) return `日报批次 ${d[1]}`
+  const h = g.match(/^health_(.+)_(\d{8}_\d{4})$/)
+  if (h) return `巡检 ${h[1]} · ${h[2]}`
+  return g
+}
+
 function textCategory(cat) {
   return cat === 'weekly_md' || cat === 'daily_md' || cat === 'health_md'
 }
@@ -78,7 +108,7 @@ function catLabel(cat) {
 <template>
   <div>
     <h2 class="page-title">报告中心</h2>
-    <p class="page-sub">查看与下载已生成的周报 / 日报 / 简报 / 巡检报告</p>
+    <p class="page-sub">按生成批次捆绑浏览；一次运行产生的 Markdown / PDF / HTML 简报在同一组</p>
 
     <el-card shadow="never" style="margin-bottom: 16px">
       <el-row :gutter="12" align="middle">
@@ -101,40 +131,46 @@ function catLabel(cat) {
       </el-row>
     </el-card>
 
-    <el-card shadow="never">
-      <el-table v-loading="loading" :data="filtered" size="small">
-        <el-table-column prop="name" label="报告名称" min-width="300" show-overflow-tooltip />
-        <el-table-column label="类型" width="150">
-          <template #default="{ row }">
-            <el-tag size="small" :type="catColor(row.category)">{{ catLabel(row.category) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="主题" width="110">
-          <template #default="{ row }">
-            <span v-if="row.topic">{{ row.topic }}</span>
-            <span v-else style="color:#c0c4cc">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="大小" width="90">
-          <template #default="{ row }">{{ formatSize(row.size) }}</template>
-        </el-table-column>
-        <el-table-column label="更新时间" width="160">
-          <template #default="{ row }">{{ formatTime(row.modified) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" type="primary" text @click="viewReport(row)">
-              {{ textCategory(row.category) ? '查看' : '打开' }}
-            </el-button>
-            <el-button size="small" text @click="downloadMd(row)" v-if="textCategory(row.category)">下载</el-button>
-            <el-button size="small" text @click="openExternal(row)" v-else>下载</el-button>
-          </template>
-        </el-table-column>
-        <template #empty>
-          <el-empty description="暂无报告，请先在「运行分析」中生成" :image-size="80" />
-        </template>
-      </el-table>
-    </el-card>
+    <div v-loading="loading">
+      <div
+        v-for="g in groups"
+        :key="g.group"
+        class="panel"
+        style="margin-bottom: 14px; box-shadow: none; border: 1px solid #f0f0f0"
+      >
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <el-tag size="small" type="info" effect="plain">{{ g.files[0].topic || '报告' }}</el-tag>
+            <b style="font-size: 14px">{{ groupLabel(g.group) }}</b>
+            <span style="color: #909399; font-size: 12px">{{ g.files.length }} 个文件</span>
+          </div>
+          <span style="color: #909399; font-size: 12px">{{ formatTime(g.newest) }}</span>
+        </div>
+        <el-table :data="g.files" size="small">
+          <el-table-column label="文件" min-width="300" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.name }}</template>
+          </el-table-column>
+          <el-table-column label="类型" width="160">
+            <template #default="{ row }">
+              <el-tag size="small" :type="catColor(row.category)">{{ catLabel(row.category) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="大小" width="95">
+            <template #default="{ row }">{{ formatSize(row.size) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="210" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" type="primary" text @click="viewReport(row)">
+                {{ textCategory(row.category) ? '查看' : '打开' }}
+              </el-button>
+              <el-button size="small" text @click="textCategory(row.category) ? downloadMd(row) : openExternal(row)">下载</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <el-empty v-if="!groups.length && !loading" description="暂无报告，请先在「运行分析」中生成" :image-size="80" />
+    </div>
 
     <el-dialog v-model="viewer.show" :title="viewer.title" width="70%" top="5vh">
       <div v-loading="viewer.loading" class="md-body" style="max-height: 70vh; overflow: auto">

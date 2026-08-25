@@ -5,6 +5,7 @@ AI News Analyzer - FastAPI Server
 import json
 import logging
 import os
+import re
 import sys
 import tempfile
 from datetime import datetime
@@ -194,6 +195,24 @@ def _topic_from_report_name(name: str) -> str:
     return ""
 
 
+def _report_group(name: str) -> str:
+    """批次标识：一次生成操作产生的所有文件归为一组。
+
+    e.g. ai_weekly_report_20260617_20260623_20260824_1630.{md,pdf}
+         + ai_weekly_brief_20260617_20260623_20260824_1630.html  -> 同组
+    """
+    m = re.match(r"(.+)_weekly_(?:report|brief)_(.+)\.", name)
+    if m:
+        return f"{m.group(1)}_weekly_{m.group(2)}"
+    m = re.match(r"daily_(?:report|brief)_(.+)\.", name)
+    if m:
+        return f"daily_{m.group(1)}"
+    m = re.match(r"source_health_(.+)_(\d{8}_\d{4})\.", name)
+    if m:
+        return f"health_{m.group(1)}_{m.group(2)}"
+    return name
+
+
 def _scan_reports(limit: int = 200):
     report_dir = _resolve_report_dir()
     entries = []
@@ -207,6 +226,7 @@ def _scan_reports(limit: int = 200):
                         "name": path.name,
                         "category": category,
                         "topic": _topic_from_report_name(path.name),
+                        "group": _report_group(path.name),
                         "size": path.stat().st_size,
                         "modified": datetime.fromtimestamp(path.stat().st_mtime).isoformat(),
                     })

@@ -297,7 +297,10 @@ class ReportGenerator:
     ) -> Optional[Dict[str, str]]:
         if not self._llm_polish_enabled() or self._llm_polish_disabled_for_run:
             return None
-        if not draft_summary or draft_summary.startswith(("暂无", "摘要待生成", "正文暂未抓取成功")):
+        # 有标题就尝试翻译/改写为中文条目；即使是“正文未抓取”的薄数据也要出中文，
+        # 否则该类条目会以英文标题/摘要残留进报告。真正的空（无标题）才跳过。
+        raw_title = self._normalize_summary_text(item.get("title", ""))
+        if not raw_title and (not draft_summary or draft_summary.startswith(("暂无", "摘要待生成", "正文暂未抓取成功"))):
             return None
 
         api_key = self._llm_api_key()
