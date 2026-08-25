@@ -61,6 +61,10 @@ export function getJob(jobId) {
   return http.get(`/jobs/${jobId}`)
 }
 
+export function cancelJob(jobId) {
+  return http.post(`/jobs/${jobId}/cancel`)
+}
+
 export function analyzeDirect(payload) {
   return http.post('/analyze', payload)
 }

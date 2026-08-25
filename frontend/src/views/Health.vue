@@ -1,8 +1,11 @@
 <script setup>
 import { onMounted, ref, computed, onBeforeUnmount } from 'vue'
 import { marked } from 'marked'
-import { getMeta, createJob, getJob, listReports, getReportText } from '../api'
+import { ElMessage } from 'element-plus'
+import { getMeta, createJob, getJob, cancelJob, listReports, getReportText } from '../api'
 import { formatTime, REPORT_CATEGORIES } from '../utils/format'
+
+defineOptions({ name: 'Health' })
 
 const meta = ref(null)
 const topics = ref([])
@@ -13,6 +16,8 @@ const running = ref(false)
 const progress = ref(0)
 const result = ref(null)
 const startedAt = ref(null)
+const jobId = ref(null)
+const cancelled = ref(false)
 let timer = null
 
 const viewer = ref({ show: false, title: '', html: '', loading: false })
@@ -46,37 +51,64 @@ async function start() {
   running.value = true
   result.value = null
   progress.value = 5
+  cancelled.value = false
   startedAt.value = new Date().toISOString()
   try {
     const res = await createJob('health', { topic: topic.value })
-    const jobId = res.job.id
-    timer = setInterval(() => poll(jobId), 2000)
+    jobId.value = res.job.id
+    timer = setInterval(() => poll(jobId.value), 2000)
   } catch (e) {
     running.value = false
   }
 }
 
-async function poll(jobId) {
+async function poll(jid) {
   try {
-    const res = await getJob(jobId)
+    const res = await getJob(jid)
     const job = res.job
     if (job.status === 'running' || job.status === 'queued') {
       progress.value = progress.value >= 90 ? 90 : progress.value + 3
       return
     }
-    clearInterval(timer)
-    timer = null
-    running.value = false
+    endPolling()
     progress.value = 100
+    if (job.status === 'cancelled') {
+      cancelled.value = true
+      result.value = null
+      return
+    }
     result.value = job.result || { ok: false }
     await loadReports()
     const reportName = pathName(result.value.report)
     if (reportName) await openReport(reportName)
   } catch (e) {
-    clearInterval(timer)
-    timer = null
-    running.value = false
+    endPolling()
   }
+}
+
+function endPolling() {
+  clearInterval(timer)
+  timer = null
+  running.value = false
+}
+
+async function stop() {
+  if (!jobId.value) return
+  try {
+    await cancelJob(jobId.value)
+  } catch (e) { /* handled */ }
+  endPolling()
+  cancelled.value = true
+  result.value = null
+  ElMessage.info('巡检已停止')
+}
+
+function clearResult() {
+  endPolling()
+  result.value = null
+  startedAt.value = null
+  cancelled.value = false
+  progress.value = 0
 }
 
 function pathName(p) {
@@ -139,9 +171,14 @@ const catColor = (c) => (REPORT_CATEGORIES[c] || {}).color || 'info'
         <el-button type="primary" :loading="running" @click="start">
           {{ running ? '巡检中…' : '开始巡检' }}
         </el-button>
+        <el-button v-if="running" type="danger" plain @click="stop">停止</el-button>
+        <el-button v-if="result || cancelled" text @click="clearResult">清除结果</el-button>
         <span v-if="startedAt" style="color:#909399;font-size:12px">开始于 {{ formatTime(startedAt) }}</span>
       </div>
       <el-progress v-if="running" :percentage="progress" :stroke-width="10" style="margin-top: 14px" />
+      <div v-if="!running && cancelled" style="margin-top: 12px">
+        <el-alert type="warning" :closable="false" title="巡检已停止" description="已取消该巡检任务。" />
+      </div>
     </el-card>
 
     <template v-if="result">

@@ -61,7 +61,7 @@ const menus = [
       </el-header>
       <el-main>
         <router-view v-slot="{ Component }">
-          <keep-alive include="Analyze">
+          <keep-alive include="Analyze,Health">
             <component :is="Component" />
           </keep-alive>
         </router-view>

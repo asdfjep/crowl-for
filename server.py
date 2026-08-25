@@ -539,6 +539,15 @@ async def get_job(job_id: str):
     return {"job": job}
 
 
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    """取消一个排队中/运行中的任务（运行中的任务会丢弃其结果）。"""
+    job = job_manager.cancel(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"job": job}
+
+
 STATIC_DIR = Path(__file__).parent / "static"
 if STATIC_DIR.is_dir():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")

@@ -108,6 +108,7 @@ class JobManager:
             "kind": kind,
             "payload": payload,
             "status": "queued",
+            "cancelled": False,
             "message": "排队中",
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "started_at": None,
@@ -150,6 +151,8 @@ class JobManager:
                     return
                 job_id = self._queue.pop(0)
                 job = self._jobs[job_id]
+                if job.get("cancelled"):
+                    continue
                 job["status"] = "running"
                 job["started_at"] = datetime.now().isoformat(timespec="seconds")
                 job["message"] = "运行中"
@@ -157,18 +160,40 @@ class JobManager:
             try:
                 result = run_job(job)
                 with self._cv:
-                    job["status"] = "success"
-                    job["result"] = result
-                    job["message"] = "完成"
+                    if not job.get("cancelled"):
+                        job["status"] = "success"
+                        job["result"] = result
+                        job["message"] = "完成"
             except Exception as exc:
                 logger.exception("Job %s failed", job_id)
                 with self._cv:
-                    job["status"] = "error"
-                    job["error"] = str(exc)
-                    job["message"] = "失败"
+                    if not job.get("cancelled"):
+                        job["status"] = "error"
+                        job["error"] = str(exc)
+                        job["message"] = "失败"
             finally:
                 with self._cv:
                     job["finished_at"] = datetime.now().isoformat(timespec="seconds")
+
+    def cancel(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """Mark a queued/running job as cancelled.
+
+        Cooperative stop: a queued job is never started, and a running job's
+        result is discarded when its worker call returns (Python work cannot be
+        preempted mid-flight).
+        """
+        with self._cv:
+            job = self._jobs.get(job_id)
+            if not job:
+                return None
+            if job["status"] in ("cancelled", "success", "error"):
+                return self.get(job_id)
+            job["cancelled"] = True
+            job["status"] = "cancelled"
+            job["message"] = "已取消"
+            job["finished_at"] = datetime.now().isoformat(timespec="seconds")
+            self._cv.notify_all()
+            return self.get(job_id)
 
 
 def run_job(job: Dict[str, Any]):

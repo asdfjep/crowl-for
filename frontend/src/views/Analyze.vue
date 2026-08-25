@@ -3,7 +3,7 @@ import { onMounted, onActivated, onBeforeUnmount, ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
-import { getMeta, listDataFiles, createJob, getJob, reportUrl, getReportText } from '../api'
+import { getMeta, listDataFiles, createJob, getJob, cancelJob, reportUrl, getReportText } from '../api'
 import { formatTime, severity } from '../utils/format'
 import EChart from '../components/EChart.vue'
 
@@ -29,6 +29,7 @@ const running = ref(false)
 const polling = ref(false)
 const progress = ref(0)
 const elapsed = ref(0)
+const jobIdRef = ref(null)
 const currentJob = ref(null)
 const result = ref(null)
 const errorMsg = ref('')
@@ -139,9 +140,9 @@ async function start() {
   elapsed.value = 0
   try {
     const res = await createJob('analyze', payload)
-    const jobId = res.job.id
+    jobIdRef.value = res.job.id
     currentJob.value = res.job
-    timer = setInterval(() => poll(jobId), 2000)
+    timer = setInterval(() => poll(jobIdRef.value), 2000)
   } catch (e) {
     running.value = false
     polling.value = false
@@ -174,6 +175,32 @@ async function poll(jobId) {
     running.value = false
     polling.value = false
   }
+}
+
+async function stop() {
+  if (!jobIdRef.value) return
+  try {
+    await cancelJob(jobIdRef.value)
+  } catch (e) { /* handled */ }
+  if (timer) { clearInterval(timer); timer = null }
+  running.value = false
+  polling.value = false
+  ElMessage.info('分析已停止')
+}
+
+function clearAll() {
+  if (timer) { clearInterval(timer); timer = null }
+  running.value = false
+  polling.value = false
+  result.value = null
+  errorMsg.value = ''
+  progress.value = 0
+  elapsed.value = 0
+  uploaded.value = null
+  pasted.value = ''
+  pastedError.value = ''
+  selectedFile.value = ''
+  dataSource.value = 'latest'
 }
 
 const boardOption = computed(() => {
@@ -284,6 +311,8 @@ function openRaw() {
           <el-button type="primary" size="large" :loading="running" @click="start">
             {{ running ? '分析中…' : '开始分析' }}
           </el-button>
+          <el-button v-if="running || polling" type="danger" size="large" plain @click="stop">停止</el-button>
+          <el-button v-if="result || errorMsg" size="large" text @click="clearAll">清除结果</el-button>
         </el-form-item>
       </el-form>
 
