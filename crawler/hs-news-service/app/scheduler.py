@@ -383,6 +383,10 @@ class Scheduler:
 
         pusher = NewsPusher(analyzer_url=url)
         sources = self._get_source_names()
+        if not sources:
+            # 数据库为空（全新部署走内置源列表）时，从新闻条目的 source 字段
+            # 取源名，保证推给分析服务时 sources 非空（分析服务仅据此落盘）。
+            sources = sorted({str(getattr(i, "source", "")).strip() for i in news if getattr(i, "source", "")})
         success = await pusher.push(news, sources)
 
         if success:
