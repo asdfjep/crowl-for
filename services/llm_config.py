@@ -99,7 +99,8 @@ def _env_config() -> Dict[str, Optional[str]]:
 
 
 def chat_completion(user_text: str, system: Optional[str] = None,
-                    max_tokens: int = 400, temperature: float = 0.2) -> str:
+                    max_tokens: int = 400, temperature: float = 0.2,
+                    timeout: Optional[int] = None) -> str:
     """Minimal OpenAI-compatible chat call (no extra dependency)."""
     cfg = _env_config()
     base_url = cfg["base_url"].rstrip("/")
@@ -118,7 +119,7 @@ def chat_completion(user_text: str, system: Optional[str] = None,
         "Authorization": f"Bearer {cfg['api_key']}",
         "Content-Type": "application/json",
     })
-    with urllib.request.urlopen(req, timeout=cfg["timeout"]) as resp:
+    with urllib.request.urlopen(req, timeout=timeout or cfg["timeout"]) as resp:
         payload = json.loads(resp.read().decode("utf-8"))
     return (payload["choices"][0]["message"]["content"] or "").strip()
 
@@ -131,5 +132,6 @@ def translate_title(title: str) -> str:
         "(e.g. OpenAI, GPT, 英伟达 stays as is). Return ONLY the translation, "
         "no quotes or explanation.\n\n" + title
     )
+    # 标题翻译是高频小请求：用短超时，端点异常时快速失败降级，避免拖慢整次分析。
     return chat_completion(prompt, system="You are a precise news-headline translator.",
-                           max_tokens=120, temperature=0.1)
+                           max_tokens=120, temperature=0.1, timeout=10)

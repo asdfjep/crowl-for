@@ -399,6 +399,13 @@ class ReportGenerator:
 
         self._llm_polish_failures += 1
         self._llm_polish_stats["failed"] += 1
+        max_failures = self._env_int("NEWS_LLM_POLISH_MAX_FAILURES", 3)
+        if self._llm_polish_failures >= max_failures:
+            self._llm_polish_disabled_for_run = True
+            logger.warning(
+                "LLM polish disabled for the rest of this run after %d failures (endpoint unreachable?)",
+                self._llm_polish_failures,
+            )
         logger.warning(
             "LLM polish skipped for current article after %s attempts: %s",
             retries,

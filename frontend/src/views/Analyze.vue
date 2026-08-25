@@ -1,11 +1,13 @@
 <script setup>
-import { onMounted, ref, computed, onBeforeUnmount } from 'vue'
+import { onMounted, onActivated, onBeforeUnmount, ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
 import { getMeta, listDataFiles, createJob, getJob, reportUrl, getReportText } from '../api'
 import { formatTime, severity } from '../utils/format'
 import EChart from '../components/EChart.vue'
+
+defineOptions({ name: 'Analyze' })
 
 const route = useRoute()
 
@@ -26,6 +28,7 @@ const pastedError = ref('')
 const running = ref(false)
 const polling = ref(false)
 const progress = ref(0)
+const elapsed = ref(0)
 const currentJob = ref(null)
 const result = ref(null)
 const errorMsg = ref('')
@@ -42,14 +45,19 @@ onMounted(async () => {
   try {
     meta.value = await getMeta()
     topics.value = meta.value.topics || []
-    if (topics.value.length) topic.value = topics.value[0].key
-    if (route.query.topic && topics.value.some(t => t.key === route.query.topic)) {
-      topic.value = route.query.topic
+    if (topics.value.length && !topics.value.some(t => t.key === topic.value)) {
+      topic.value = topics.value[0].key
     }
     // LLM 已配置时默认开启润色（周报中文翻译）
     if (meta.value.llm_ready) useLlm.value = true
   } catch (e) { /* handled */ }
   await loadFiles()
+})
+
+// 组件被 keep-alive 缓存：切走再切回时保留已填状态；
+// 仅当带了 query（数据管理页「用此分析」跳转）才覆盖主题/文件。
+onActivated(() => {
+  if (route.query.topic) topic.value = route.query.topic
   if (route.query.file) {
     dataSource.value = 'file'
     selectedFile.value = route.query.file
@@ -128,6 +136,7 @@ async function start() {
   running.value = true
   polling.value = true
   progress.value = 5
+  elapsed.value = 0
   try {
     const res = await createJob('analyze', payload)
     const jobId = res.job.id
@@ -146,6 +155,7 @@ async function poll(jobId) {
     currentJob.value = job
     if (job.status === 'running' || job.status === 'queued') {
       progress.value = progress.value >= 90 ? 90 : progress.value + 3
+      elapsed.value += 2
       return
     }
     clearInterval(timer)
@@ -277,7 +287,10 @@ function openRaw() {
         </el-form-item>
       </el-form>
 
-      <el-progress v-if="polling" :percentage="progress" :stroke-width="10" style="margin: 4px 0 8px" />
+      <el-progress v-if="polling" :percentage="progress" :stroke-width="10" style="margin: 4px 0 4px" />
+      <div v-if="polling" style="color:#909399;font-size:12px;margin:0 0 8px">
+        分析进行中，已运行 {{ elapsed }} 秒（数据量越大、开启 LLM 润色时耗时越长，请勿关闭页面）
+      </div>
     </el-card>
 
     <el-alert v-if="errorMsg" type="error" :title="errorMsg" :closable="false" style="margin-bottom: 16px" />
