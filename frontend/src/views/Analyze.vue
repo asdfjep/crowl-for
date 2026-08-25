@@ -46,6 +46,8 @@ onMounted(async () => {
     if (route.query.topic && topics.value.some(t => t.key === route.query.topic)) {
       topic.value = route.query.topic
     }
+    // LLM 已配置时默认开启润色（周报中文翻译）
+    if (meta.value.llm_ready) useLlm.value = true
   } catch (e) { /* handled */ }
   await loadFiles()
   if (route.query.file) {

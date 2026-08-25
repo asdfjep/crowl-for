@@ -19,6 +19,32 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _load_local_llm_config() -> None:
+    """Load machine-local LLM defaults so LLM polish (weekly-report Chinese
+    translation) works through the web API, mirroring run_llm.py."""
+    config_path = Path(__file__).with_name("llm_config.local.json")
+    if not config_path.exists():
+        return
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Failed to load %s: %s", config_path, exc)
+        return
+    env_map = {
+        "api_key": "NEWS_LLM_API_KEY",
+        "base_url": "NEWS_LLM_BASE_URL",
+        "model": "NEWS_LLM_MODEL",
+        "timeout": "NEWS_LLM_TIMEOUT",
+    }
+    for key, env_name in env_map.items():
+        value = str(config.get(key, "")).strip()
+        if value:
+            os.environ.setdefault(env_name, value)
+
+
+_load_local_llm_config()
+
 app = FastAPI(title="AI News Analyzer", version="1.0.0")
 
 from services.analyzer import NewsAnalyzer
