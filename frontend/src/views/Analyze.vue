@@ -77,6 +77,32 @@ async function loadFiles() {
 
 const topicFiles = computed(() => files.value.filter(f => f.topic === topic.value))
 
+const bundleOptions = computed(() => {
+  const by = {}
+  for (const f of files.value) {
+    if (!f.bundle) continue
+    (by[f.bundle] = by[f.bundle] || []).push(f)
+  }
+  const arr = Object.entries(by).map(([bundle, fs]) => ({
+    bundle,
+    files: fs,
+    newest: fs[0] && fs[0].modified
+  }))
+  arr.sort((a, b) => (b.newest || '').localeCompare(a.newest || ''))
+  return arr
+})
+
+function bundleLabel(b) {
+  const t = new Date(b.newest)
+  return Number.isNaN(t.getTime()) ? b.bundle : t.toLocaleString('zh-CN', { hour12: false })
+}
+
+const selectedBundle = ref('')
+const selectedBundleFile = computed(() => {
+  const b = bundleOptions.value.find(x => x.bundle === selectedBundle.value)
+  return b && b.files.length ? b.files[0].name : ''
+})
+
 const llmReady = computed(() => !!meta.value?.llm_ready)
 
 function topicName(key) {
@@ -88,7 +114,7 @@ function openUrl(url) {
   window.open(url, '_blank')
 }
 
-async function startBatch() {
+async function submitBatch(sharedDataFile) {
   if (running.value) return
   const list = (topics.value.length ? topics.value : [{ key: 'ai' }]).map(t => t.key)
   result.value = null
@@ -103,8 +129,8 @@ async function startBatch() {
       use_llm: useLlm.value,
       date: date.value || today()
     }
-    // 数据来源选了「选择文件」时，整批共用它作为捆绑包数据。
-    if (dataSource.value === 'file' && selectedFile.value) payload.data_file = selectedFile.value
+    // 指定了捆绑包/共享数据文件时，整批共用同一份数据。
+    if (sharedDataFile) payload.data_file = sharedDataFile
     const res = await createJob('analyze', payload)
     const jobId = res.job.id
     currentJob.value = res.job
@@ -113,6 +139,12 @@ async function startBatch() {
     running.value = false
     polling.value = false
   }
+}
+
+async function startBatch() {
+  // 「选择文件」模式下，批量共用该文件；否则用各主题最新。
+  const file = dataSource.value === 'file' ? selectedFile.value : ''
+  await submitBatch(file || undefined)
 }
 
 function onFileChange(file, fileList) {
@@ -150,6 +182,13 @@ function validatePasted() {
 
 async function start() {
   if (running.value) return
+  // 选了「数据捆绑包」→ 自动走批量分析（全部主题共用该批次数据）。
+  if (dataSource.value === 'bundle') {
+    if (!selectedBundle.value) { ElMessage.warning('请先选择数据批次'); return }
+    if (!selectedBundleFile.value) { ElMessage.warning('该批次暂无可用数据文件'); return }
+    await submitBatch(selectedBundleFile.value)
+    return
+  }
   const payload = {
     topic: topic.value,
     use_llm: useLlm.value,
@@ -313,6 +352,7 @@ function openRaw() {
           <el-radio-group v-model="dataSource">
             <el-radio value="latest">最新数据文件</el-radio>
             <el-radio value="file">选择文件</el-radio>
+            <el-radio value="bundle">数据捆绑包（批量分析）</el-radio>
             <el-radio value="upload">上传文件</el-radio>
             <el-radio value="paste">粘贴 JSON</el-radio>
           </el-radio-group>
@@ -322,6 +362,14 @@ function openRaw() {
           <el-select v-model="selectedFile" placeholder="选择该主题下的数据文件" style="width: 420px" filterable>
             <el-option v-for="f in topicFiles" :key="f.name" :value="f.name"
               :label="`${f.name}（${f.item_count} 条）`" />
+          </el-select>
+          <el-button text type="primary" @click="loadFiles" style="margin-left: 8px">刷新</el-button>
+        </el-form-item>
+
+        <el-form-item v-if="dataSource === 'bundle'" label="数据批次">
+          <el-select v-model="selectedBundle" placeholder="选择数据批次（将按全部主题批量分析）" style="width: 460px" filterable>
+            <el-option v-for="b in bundleOptions" :key="b.bundle" :value="b.bundle"
+              :label="`${bundleLabel(b)}（${b.files.length} 个文件）`" />
           </el-select>
           <el-button text type="primary" @click="loadFiles" style="margin-left: 8px">刷新</el-button>
         </el-form-item>

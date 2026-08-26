@@ -414,6 +414,12 @@ async def delete_report(report_name: str):
     return {"deleted": report_name}
 
 
+def _data_bundle(name: str) -> str:
+    """数据文件的时间批次（按分钟），如 news_20260826_175901.json -> 20260826_1759。"""
+    m = re.search(r"news_(\d{8}_\d{4})", name)
+    return m.group(1) if m else name
+
+
 @app.get("/api/data-files")
 async def list_data_files():
     """列出各主题数据目录下的 news_*.json"""
@@ -438,6 +444,7 @@ async def list_data_files():
                 "topic": topic["key"],
                 "name": path.name,
                 "path": str(path),
+                "bundle": _data_bundle(path.name),
                 "size": path.stat().st_size,
                 "modified": datetime.fromtimestamp(path.stat().st_mtime).isoformat(),
                 "item_count": _count_news_items(path),
