@@ -13,23 +13,16 @@ from xml.etree import ElementTree
 from .base import BaseCrawler, NewsItem, logger
 
 EXTRA_FEEDS = [
-    # 商业航天
+    # 商业航天（替代被反爬/不可达的 SpaceNews、TheVerge）
     {"key": "ars_science", "name": "Ars Technica Science",
      "url": "https://arstechnica.com/science/feed/", "category": "aerospace"},
     {"key": "techcrunch_space", "name": "TechCrunch Space",
      "url": "https://techcrunch.com/category/space/feed/", "category": "aerospace"},
     {"key": "nasa_brief", "name": "NASA Breaking News",
      "url": "https://www.nasa.gov/feed/", "category": "aerospace"},
-    # 人工智能
+    # 人工智能（替代 aibusiness；注意 deepmind.google 走 Google，CN 网络时通时断）
     {"key": "arxiv_ai", "name": "arXiv cs.AI",
      "url": "https://export.arxiv.org/rss/cs.AI", "category": "ai"},
-    {"key": "hf_blog", "name": "Hugging Face Blog",
-     "url": "https://huggingface.co/blog/feed.xml", "category": "ai"},
-    # 偏光板 / 显示
-    {"key": "displaydaily", "name": "Display Daily",
-     "url": "https://www.displaydaily.com/feed", "category": "polarizer"},
-    {"key": "flatpanelshd", "name": "FlatPanelsHD",
-     "url": "https://www.flatpanelshd.com/flatpanelshd_rss.xml", "category": "polarizer"},
 ]
 
 
