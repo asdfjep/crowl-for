@@ -2,7 +2,7 @@
 import { onMounted, ref, computed } from 'vue'
 import { marked } from 'marked'
 import { listReports, getReportText, reportUrl, downloadText } from '../api'
-import { formatSize, formatTime, REPORT_CATEGORIES } from '../utils/format'
+import { formatSize, formatTime, REPORT_CATEGORIES, TOPIC_KEYS } from '../utils/format'
 
 const reports = ref([])
 const loading = ref(false)
@@ -63,13 +63,19 @@ const groups = computed(() => {
 })
 
 function groupLabel(g) {
-  const w = g.match(/^(.+?)_weekly_(.+)$/)
-  if (w) return `周报批次 ${w[1]} · ${w[2]}`
+  const w = g.match(/^weekly_(.+)$/)
+  if (w) return `周报 · ${w[1]}`
   const d = g.match(/^daily_(.+)$/)
-  if (d) return `日报批次 ${d[1]}`
-  const h = g.match(/^health_(.+)_(\d{8}_\d{4})$/)
-  if (h) return `巡检 ${h[1]} · ${h[2]}`
+  if (d) return `日报 · ${d[1]}`
+  const h = g.match(/^health_(\d{8}_\d{4})$/)
+  if (h) return `巡检 · ${h[1]}`
   return g
+}
+
+function groupTopics(files) {
+  return [...new Set(files.map(f => f.topic).filter(Boolean))]
+    .map(k => TOPIC_KEYS[k] || k)
+    .join(' / ') || '报告'
 }
 
 function textCategory(cat) {
@@ -140,10 +146,10 @@ function catLabel(cat) {
       >
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
-            <el-tag size="small" type="info" effect="plain">{{ g.files[0].topic || '报告' }}</el-tag>
-            <b style="font-size: 14px">{{ groupLabel(g.group) }}</b>
-            <span style="color: #909399; font-size: 12px">{{ g.files.length }} 个文件</span>
-          </div>
+          <el-tag size="small" type="info" effect="plain">{{ groupTopics(g.files) }}</el-tag>
+          <b style="font-size: 14px">{{ groupLabel(g.group) }}</b>
+          <span style="color: #909399; font-size: 12px">{{ g.files.length }} 个文件</span>
+        </div>
           <span style="color: #909399; font-size: 12px">{{ formatTime(g.newest) }}</span>
         </div>
         <el-table :data="g.files" size="small">

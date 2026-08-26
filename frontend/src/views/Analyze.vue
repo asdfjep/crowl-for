@@ -79,6 +79,39 @@ const topicFiles = computed(() => files.value.filter(f => f.topic === topic.valu
 
 const llmReady = computed(() => !!meta.value?.llm_ready)
 
+function topicName(key) {
+  const t = topics.value.find(x => x.key === key)
+  return t ? t.label : key
+}
+
+function openUrl(url) {
+  window.open(url, '_blank')
+}
+
+async function startBatch() {
+  if (running.value) return
+  const list = (topics.value.length ? topics.value : [{ key: 'ai' }]).map(t => t.key)
+  result.value = null
+  errorMsg.value = ''
+  running.value = true
+  polling.value = true
+  progress.value = 5
+  elapsed.value = 0
+  try {
+    const res = await createJob('analyze', {
+      topics: list,
+      use_llm: useLlm.value,
+      date: date.value || today()
+    })
+    const jobId = res.job.id
+    currentJob.value = res.job
+    timer = setInterval(() => poll(jobId), 2000)
+  } catch (e) {
+    running.value = false
+    polling.value = false
+  }
+}
+
 function onFileChange(file, fileList) {
   const reader = new FileReader()
   reader.onload = () => {
@@ -311,6 +344,9 @@ function openRaw() {
           <el-button type="primary" size="large" :loading="running" @click="start">
             {{ running ? '分析中…' : '开始分析' }}
           </el-button>
+          <el-button size="large" :loading="running" @click="startBatch" style="margin-left: 12px">
+            批量分析全部主题
+          </el-button>
           <el-button v-if="running || polling" type="danger" size="large" plain @click="stop">停止</el-button>
           <el-button v-if="result || errorMsg" size="large" text @click="clearAll">清除结果</el-button>
         </el-form-item>
@@ -325,6 +361,30 @@ function openRaw() {
     <el-alert v-if="errorMsg" type="error" :title="errorMsg" :closable="false" style="margin-bottom: 16px" />
 
     <template v-if="result">
+      <template v-if="result.batch">
+        <el-card shadow="never" style="margin-bottom: 16px">
+          <template #header><span style="font-weight: 700">批量分析结果（{{ Object.keys(result.results || {}).length }} 个主题）</span></template>
+          <el-row :gutter="16">
+            <el-col v-for="(r, t) in result.results" :key="t" :xs="24" :md="8" style="margin-bottom: 12px">
+              <div class="panel" style="box-shadow:none;border:1px solid #f0f0f0">
+                <div style="font-weight: 700; margin-bottom: 8px">{{ topicName(t) }}</div>
+                <el-descriptions :column="2" size="small" border>
+                  <el-descriptions-item label="过滤后输入">{{ r.summary?.input_count }}</el-descriptions-item>
+                  <el-descriptions-item label="事件簇">{{ r.summary?.cluster_count }}</el-descriptions-item>
+                  <el-descriptions-item label="板块分组">{{ r.summary?.board_count }}</el-descriptions-item>
+                  <el-descriptions-item label="生成时间">{{ formatTime(r.generated_at) }}</el-descriptions-item>
+                </el-descriptions>
+                <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap">
+                  <el-tag v-if="r.report_name" type="primary" size="large" class="link-btn" @click="viewReport(r.report_name)">Markdown</el-tag>
+                  <el-tag v-if="r.report_pdf_name" type="success" size="large" class="link-btn" @click="openUrl(reportUrl(r.report_pdf_name))">PDF</el-tag>
+                  <el-tag v-if="r.brief_name" type="warning" size="large" class="link-btn" @click="openUrl(reportUrl(r.brief_name))">简报</el-tag>
+                </div>
+              </div>
+            </el-col>
+          </el-row>
+        </el-card>
+      </template>
+      <template v-else>
       <el-card shadow="never" style="margin-bottom: 16px">
         <template #header>
           <div style="display: flex; justify-content: space-between; align-items: center">
@@ -428,6 +488,7 @@ function openRaw() {
           </el-card>
         </el-col>
       </el-row>
+      </template>
     </template>
 
     <el-dialog v-model="reportViewer.show" :title="reportViewer.title" width="70%" top="5vh">

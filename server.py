@@ -200,16 +200,17 @@ def _report_group(name: str) -> str:
 
     e.g. ai_weekly_report_20260617_20260623_20260824_1630.{md,pdf}
          + ai_weekly_brief_20260617_20260623_20260824_1630.html  -> 同组
+    去掉主题前缀，使「批量分析」三个主题共用同一时间戳时归到同一批。
     """
     m = re.match(r"(.+)_weekly_(?:report|brief)_(.+)\.", name)
     if m:
-        return f"{m.group(1)}_weekly_{m.group(2)}"
+        return f"weekly_{m.group(2)}"
     m = re.match(r"daily_(?:report|brief)_(.+)\.", name)
     if m:
         return f"daily_{m.group(1)}"
     m = re.match(r"source_health_(.+)_(\d{8}_\d{4})\.", name)
     if m:
-        return f"health_{m.group(1)}_{m.group(2)}"
+        return f"health_{m.group(2)}"
     return name
 
 

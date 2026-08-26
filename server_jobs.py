@@ -199,17 +199,36 @@ class JobManager:
 def run_job(job: Dict[str, Any]):
     kind = job.get("kind")
     payload = job.get("payload") or {}
+    topics = [str(t).strip() for t in (payload.get("topics") or []) if str(t).strip()]
     if kind == "analyze":
-        return run_analyze(payload)
+        return run_analyze_batch(payload) if len(topics) > 1 else run_analyze(payload)
     if kind == "health":
-        return run_health_check(payload)
+        return run_health_batch(payload) if len(topics) > 1 else run_health_check(payload)
     raise ValueError(f"Unknown job kind: {kind!r}")
 
 
 def run_analyze(payload: Dict[str, Any]) -> Dict[str, Any]:
     topic = str(payload.get("topic") or os.getenv("NEWS_TOPIC") or "ai").strip()
+    return _analyze_one(topic, payload, stamp=payload.get("stamp"))
+
+
+def run_analyze_batch(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """一次批量分析多个主题（默认三个）。共用一个报告时间戳，报告中心归为一批。"""
+    topics = [str(t).strip() for t in (payload.get("topics") or []) if str(t).strip()]
+    if not topics:
+        topics = ["ai", "commercial_space", "display_polarizer"]
+    stamp = str(payload.get("stamp") or datetime.now().strftime("%Y%m%d_%H%M"))
+    results = {t: _analyze_one(t, payload, stamp=stamp) for t in topics}
+    return {"batch": True, "stamp": stamp, "results": results}
+
+
+def _analyze_one(topic: str, payload: Dict[str, Any], stamp: Optional[str] = None) -> Dict[str, Any]:
     use_llm = bool(payload.get("use_llm"))
     date = payload.get("date") or None
+
+    # 批量模式：让各主题的报告文件名共用同一时间戳，报告中心可按批次归组。
+    if stamp:
+        os.environ["NEWS_REPORT_STAMP"] = str(stamp)
 
     from services.topic_config import load_topic_config
 
@@ -337,6 +356,18 @@ def _board_breakdown(board_summary: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def run_health_check(payload: Dict[str, Any]) -> Dict[str, Any]:
     topic = str(payload.get("topic") or "ai").strip()
+    return _health_one(topic)
+
+
+def run_health_batch(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """一次批量巡检多个主题（默认三个）。"""
+    topics = [str(t).strip() for t in (payload.get("topics") or []) if str(t).strip()]
+    if not topics:
+        topics = ["ai", "commercial_space", "display_polarizer"]
+    return {"batch": True, "results": {t: _health_one(t) for t in topics}}
+
+
+def _health_one(topic: str) -> Dict[str, Any]:
     cmd = [sys.executable, "run.py", "--topic", topic, "--health-check"]
     timeout = int(os.getenv("NEWS_HEALTH_TOTAL_TIMEOUT", "600"))
     try:

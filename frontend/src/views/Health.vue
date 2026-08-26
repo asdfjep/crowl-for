@@ -46,6 +46,37 @@ const healthReports = computed(() =>
     .filter(r => !topic.value || r.topic === topic.value)
 )
 
+function topicLabel(key) {
+  const t = topics.value.find(x => x.key === key)
+  return t ? t.label : key
+}
+
+const batchRows = computed(() => {
+  if (!result.value?.batch) return []
+  return Object.entries(result.value.results || {}).map(([k, r]) => ({
+    key: k,
+    label: topicLabel(k),
+    ok: !!r.ok,
+    summary: r.summary || (r.ok ? '正常' : '异常')
+  }))
+})
+
+async function startBatch() {
+  if (running.value) return
+  const list = (topics.value.length ? topics.value : [{ key: 'ai' }]).map(t => t.key)
+  running.value = true
+  result.value = null
+  progress.value = 5
+  startedAt.value = new Date().toISOString()
+  try {
+    const res = await createJob('health', { topics: list })
+    const jobId = res.job.id
+    timer = setInterval(() => poll(jobId), 2000)
+  } catch (e) {
+    running.value = false
+  }
+}
+
 async function start() {
   if (running.value) return
   running.value = true
@@ -171,6 +202,7 @@ const catColor = (c) => (REPORT_CATEGORIES[c] || {}).color || 'info'
         <el-button type="primary" :loading="running" @click="start">
           {{ running ? '巡检中…' : '开始巡检' }}
         </el-button>
+        <el-button type="success" plain :loading="running" @click="startBatch">批量巡检全部主题</el-button>
         <el-button v-if="running" type="danger" plain @click="stop">停止</el-button>
         <el-button v-if="result || cancelled" text @click="clearResult">清除结果</el-button>
         <span v-if="startedAt" style="color:#909399;font-size:12px">开始于 {{ formatTime(startedAt) }}</span>
@@ -182,6 +214,21 @@ const catColor = (c) => (REPORT_CATEGORIES[c] || {}).color || 'info'
     </el-card>
 
     <template v-if="result">
+      <template v-if="result.batch">
+        <el-card shadow="never" style="margin-bottom: 16px">
+          <template #header><span style="font-weight: 700">批量巡检结果（{{ Object.keys(result.results || {}).length }} 个主题）</span></template>
+          <el-table :data="batchRows" size="small">
+            <el-table-column label="主题" width="160"><template #default="{ row }">{{ row.label }}</template></el-table-column>
+            <el-table-column label="状态" width="110">
+              <template #default="{ row }">
+                <el-tag :type="row.ok ? 'success' : 'error'" size="small">{{ row.ok ? '正常' : '异常' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="summary" label="汇总" min-width="220"></el-table-column>
+          </el-table>
+        </el-card>
+      </template>
+      <template v-else>
       <el-card shadow="never" style="margin-bottom: 16px">
         <template #header>
           <span style="font-weight: 700">巡检结果 · {{ topic }}</span>
@@ -209,6 +256,7 @@ const catColor = (c) => (REPORT_CATEGORIES[c] || {}).color || 'info'
           <pre style="background:#fafafa;padding:12px;border-radius:6px;font-size:12px;white-space:pre-wrap;font-family:monospace;max-height:220px;overflow:auto">{{ underline(result.output_tail) }}</pre>
         </div>
       </el-card>
+      </template>
     </template>
 
     <el-card shadow="never">

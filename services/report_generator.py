@@ -381,7 +381,7 @@ class ReportGenerator:
         if not tasks:
             return
 
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+        timestamp = os.getenv("NEWS_REPORT_STAMP") or datetime.now().strftime('%Y%m%d_%H%M')
         json_path = self.report_dir / f"manual_summary_tasks_{timestamp}.json"
         md_path = self.report_dir / f"manual_summary_tasks_{timestamp}.md"
         payload = {
@@ -572,7 +572,7 @@ class ReportGenerator:
         report_content = '\n'.join(md)
 
         # 保存完整报告
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+        timestamp = os.getenv("NEWS_REPORT_STAMP") or datetime.now().strftime('%Y%m%d_%H%M')
         if is_weekly:
             start_tag = period_start.replace('-', '')
             end_tag = period_end.replace('-', '')
@@ -1032,7 +1032,7 @@ class ReportGenerator:
 </html>'''
 
         # 保存 HTML 简报
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+        timestamp = os.getenv("NEWS_REPORT_STAMP") or datetime.now().strftime('%Y%m%d_%H%M')
         if is_weekly:
             start_tag = period_start.replace('-', '')
             end_tag = period_end.replace('-', '')
