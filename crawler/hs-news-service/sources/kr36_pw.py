@@ -54,8 +54,10 @@ class Kr36Crawler(PlaywrightCrawler):
             logger.info(f"36Kr: {len(news_list)} 条")
         except Exception as e:
             logger.error(f"36Kr 解析失败: {e}")
-        
-        await enrich_items(self, news_list, limit=8)
+
+        # 36kr 文章页是 JS 渲染 + 登录墙，HTTP 抓不到正文：用已装好的 Chromium
+        # 并发打开文章页抽取正文（受 18s 预算限制，不会拖超巡检的 30s）。
+        await self.enrich_items_with_browser(news_list)
         return news_list
 
     def now(self):

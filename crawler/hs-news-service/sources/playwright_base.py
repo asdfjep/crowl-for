@@ -4,6 +4,7 @@
 """
 import asyncio
 import logging
+import time
 from typing import List, Optional
 from playwright.async_api import async_playwright, Page, Browser
 from .base import BaseCrawler, NewsItem
@@ -118,6 +119,58 @@ class PlaywrightCrawler(BaseCrawler):
                     location="全球"
                 ))
         return news_list
+
+    async def enrich_items_with_browser(self, items, limit: int = 8, concurrency: int = 4,
+                                        per_page_timeout: int = 8000, budget: float = 18.0) -> None:
+        """用单个无头浏览器并发打开文章页，抽取正文补齐 title-only 条目。
+
+        适用场景：列表页能抓到标题/链接但无正文（如 36kr 的 JS 渲染文章页）。
+        受预算与并发限制，避免把一次巡检拖超时。
+        """
+        from .content_fetch import extract_main_text
+
+        targets = [
+            it for it in items
+            if it and not ((it.content and len(it.content) >= 40) or (it.summary and len(it.summary) >= 40))
+        ][:limit]
+        if not targets:
+            return
+        async with async_playwright() as p:
+            try:
+                browser = await p.chromium.launch(headless=True, args=self.browser_args)
+                context = await browser.new_context(
+                    viewport={"width": 1920, "height": 1080},
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                    ignore_https_errors=True,
+                    locale="zh-CN",
+                )
+                await context.add_init_script(self.stealth_script)
+                sem = asyncio.Semaphore(concurrency)
+                started = time.monotonic()
+
+                async def one(item):
+                    async with sem:
+                        if time.monotonic() - started > budget:
+                            return
+                        page = await context.new_page()
+                        try:
+                            await page.goto(item.url, wait_until="domcontentloaded", timeout=per_page_timeout)
+                            await page.wait_for_timeout(1200)
+                            html = await page.content()
+                            text = extract_main_text(html)
+                            if len(text) >= 40:
+                                item.content = text
+                                if not item.summary or len(item.summary) < 40:
+                                    item.summary = text[:200]
+                        except Exception as exc:
+                            logger.debug("[%s] browser enrich %s: %s", self.name, item.url, exc)
+                        finally:
+                            await page.close()
+
+                await asyncio.gather(*[one(it) for it in targets], return_exceptions=True)
+                await browser.close()
+            except Exception as exc:
+                logger.warning("[%s] browser enrichment failed: %s", self.name, exc)
 
     def now(self):
         from datetime import datetime
