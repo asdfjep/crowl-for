@@ -793,6 +793,9 @@ class ReportGenerator:
 
         # ===== 标题 =====
         md.append(f"# {report_label}\n")
+        # 模块标注：标出本份报告所属主题（智能/航天/显示），供下游按模块切分。
+        if topic:
+            md.append(f'\n> **[模块]**：{topic}（{report_prefix or topic}）\n')
         if is_weekly:
             md.append(f"**报告周期**: {period_start} 至 {period_end}  |  **生成时间**: {now_str}\n")
         else:
@@ -802,7 +805,9 @@ class ReportGenerator:
 
         # ===== A1-A8 正文 =====
         md.append(self._generate_a1_a8_news_digest(all_news))
-        
+        if topic:
+            md.append(f'\n---\n> **[模块结束]**：{topic}（{report_prefix or topic}）\n')
+
         report_content = '\n'.join(md)
 
         # 保存完整报告
@@ -887,6 +892,7 @@ class ReportGenerator:
         period_start = period_start or date
         is_weekly = report_type == 'weekly'
         topic_prefix = f"{topic}" if topic else ''
+        module_tag = f'模块：{topic}（{report_prefix}）' if topic else ''
         title_text = f"{topic_prefix}周报" if is_weekly else f"{topic_prefix}每日简报"
         subtitle_text = (
             f"{period_start} 至 {period_end}"
@@ -1145,6 +1151,16 @@ class ReportGenerator:
   }}
   .header h1 {{ font-size: 24px; font-weight: 700; color: #111; }}
   .header .subtitle {{ color: #666; font-size: 14px; margin-top: 8px; }}
+  .module-tag {{
+    display: inline-block;
+    margin-top: 6px;
+    padding: 2px 10px;
+    border-radius: 4px;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-size: 13px;
+    font-weight: 600;
+  }}
   .stats {{
     display: flex;
     justify-content: center;
@@ -1236,6 +1252,7 @@ class ReportGenerator:
   <div class="header">
     <h1>{title_text}</h1>
     <div class="subtitle">{subtitle_text} &nbsp;|&nbsp; 生成时间: {now_str}</div>
+    <div class="module-tag">{module_tag}</div>
     <div class="stats">
       <div class="stat"><div class="stat-value">{total_news}</div><div class="stat-label">原始新闻</div></div>
       <div class="stat"><div class="stat-value">{total_clusters}</div><div class="stat-label">事件簇</div></div>
