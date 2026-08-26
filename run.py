@@ -304,7 +304,8 @@ def run_source_health_check(analyzer: NewsAnalyzer) -> dict:
     payload = _extract_health_payload(combined_output)
     report_dir = Path(__file__).resolve().parent / "reports"
     report_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M")
+    # 批量巡检时用共享时间戳，让三个主题的报告在报告中心归为一组。
+    stamp = os.getenv("NEWS_REPORT_STAMP") or datetime.now().strftime("%Y%m%d_%H%M")
     json_path = report_dir / f"source_health_{analyzer.topic_key}_{stamp}.json"
     md_path = report_dir / f"source_health_{analyzer.topic_key}_{stamp}.md"
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

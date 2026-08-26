@@ -401,6 +401,19 @@ async def get_report(report_name: str):
     return {"name": report_name, "content": content}
 
 
+@app.delete("/api/reports/{report_name}")
+async def delete_report(report_name: str):
+    """删除单个报告文件（路径安全）。"""
+    sub = _safe_report_path(report_name)
+    if sub is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    try:
+        sub.unlink()
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"删除失败: {exc}")
+    return {"deleted": report_name}
+
+
 @app.get("/api/data-files")
 async def list_data_files():
     """列出各主题数据目录下的 news_*.json"""

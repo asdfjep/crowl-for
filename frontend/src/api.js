@@ -37,6 +37,10 @@ export function reportUrl(name) {
   return `/api/reports/${encodeURIComponent(name)}`
 }
 
+export function deleteReport(name) {
+  return http.delete(`/reports/${encodeURIComponent(name)}`)
+}
+
 export function listDataFiles() {
   return http.get('/data-files')
 }

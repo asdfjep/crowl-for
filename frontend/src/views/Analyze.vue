@@ -98,11 +98,14 @@ async function startBatch() {
   progress.value = 5
   elapsed.value = 0
   try {
-    const res = await createJob('analyze', {
+    const payload = {
       topics: list,
       use_llm: useLlm.value,
       date: date.value || today()
-    })
+    }
+    // 数据来源选了「选择文件」时，整批共用它作为捆绑包数据。
+    if (dataSource.value === 'file' && selectedFile.value) payload.data_file = selectedFile.value
+    const res = await createJob('analyze', payload)
     const jobId = res.job.id
     currentJob.value = res.job
     timer = setInterval(() => poll(jobId), 2000)

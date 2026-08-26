@@ -1,7 +1,8 @@
 <script setup>
 import { onMounted, ref, computed } from 'vue'
 import { marked } from 'marked'
-import { listReports, getReportText, reportUrl, downloadText } from '../api'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { listReports, getReportText, reportUrl, downloadText, deleteReport } from '../api'
 import { formatSize, formatTime, REPORT_CATEGORIES, TOPIC_KEYS } from '../utils/format'
 
 const reports = ref([])
@@ -103,6 +104,27 @@ function openExternal(row) {
   window.open(reportUrl(row.name), '_blank')
 }
 
+async function removeReport(row) {
+  try {
+    await ElMessageBox.confirm(`确定删除报告「${row.name}」？`, '删除确认', { type: 'warning' })
+  } catch (e) { return }
+  await deleteReport(row.name)
+  ElMessage.success('已删除')
+  await load()
+}
+
+async function removeGroup(g) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除这一批（${g.files.length} 个文件）？\n${g.files.map(f => f.name).join('\n')}`,
+      '删除整批', { type: 'warning' }
+    )
+  } catch (e) { return }
+  await Promise.all(g.files.map(f => deleteReport(f.name)))
+  ElMessage.success('已删除整批')
+  await load()
+}
+
 function catColor(cat) {
   return (REPORT_CATEGORIES[cat] || {}).color || 'info'
 }
@@ -150,7 +172,10 @@ function catLabel(cat) {
           <b style="font-size: 14px">{{ groupLabel(g.group) }}</b>
           <span style="color: #909399; font-size: 12px">{{ g.files.length }} 个文件</span>
         </div>
-          <span style="color: #909399; font-size: 12px">{{ formatTime(g.newest) }}</span>
+          <div style="display: flex; align-items: center; gap: 8px">
+            <span style="color: #909399; font-size: 12px">{{ formatTime(g.newest) }}</span>
+            <el-button text type="danger" size="small" @click="removeGroup(g)">删除该批</el-button>
+          </div>
         </div>
         <el-table :data="g.files" size="small">
           <el-table-column label="文件" min-width="300" show-overflow-tooltip>
@@ -164,12 +189,13 @@ function catLabel(cat) {
           <el-table-column label="大小" width="95">
             <template #default="{ row }">{{ formatSize(row.size) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="210" fixed="right">
+          <el-table-column label="操作" width="270" fixed="right">
             <template #default="{ row }">
               <el-button size="small" type="primary" text @click="viewReport(row)">
                 {{ textCategory(row.category) ? '查看' : '打开' }}
               </el-button>
               <el-button size="small" text @click="textCategory(row.category) ? downloadMd(row) : openExternal(row)">下载</el-button>
+              <el-button size="small" text type="danger" @click="removeReport(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>

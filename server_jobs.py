@@ -360,11 +360,14 @@ def run_health_check(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def run_health_batch(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """一次批量巡检多个主题（默认三个）。"""
+    """一次批量巡检多个主题（默认三个）。共用一个报告时间戳，报告中心归为一批。"""
     topics = [str(t).strip() for t in (payload.get("topics") or []) if str(t).strip()]
     if not topics:
         topics = ["ai", "commercial_space", "display_polarizer"]
-    return {"batch": True, "results": {t: _health_one(t) for t in topics}}
+    stamp = str(payload.get("stamp") or datetime.now().strftime("%Y%m%d_%H%M"))
+    os.environ["NEWS_REPORT_STAMP"] = stamp
+    results = {t: _health_one(t) for t in topics}
+    return {"batch": True, "stamp": stamp, "results": results}
 
 
 def _health_one(topic: str) -> Dict[str, Any]:
