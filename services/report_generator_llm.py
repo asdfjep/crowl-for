@@ -266,8 +266,11 @@ class ReportGenerator:
     def _llm_api_key(self) -> str:
         return os.getenv("NEWS_LLM_API_KEY", "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
 
+    def _llm_base_url(self) -> str:
+        return os.getenv("NEWS_LLM_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
+
     def _llm_chat_url(self) -> str:
-        base_url = os.getenv("NEWS_LLM_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
+        base_url = self._llm_base_url()
         if base_url.endswith("/chat/completions"):
             return base_url
         return f"{base_url}/chat/completions"
@@ -2907,7 +2910,7 @@ class ReportGenerator:
             "temperature": 0.2,
         }
         request = urllib.request.Request(
-            "https://api.openai.com/v1/chat/completions",
+            f"{self._llm_base_url().rstrip('/')}/chat/completions",
             data=json.dumps(payload).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {api_key}",
@@ -3128,7 +3131,7 @@ class ReportGenerator:
                 "temperature": 0.2,
             }
             request = urllib.request.Request(
-                "https://api.openai.com/v1/chat/completions",
+                f"{self._llm_base_url().rstrip('/')}/chat/completions",
                 data=json.dumps(payload).encode("utf-8"),
                 headers={
                     "Authorization": f"Bearer {api_key}",
@@ -3180,7 +3183,7 @@ class ReportGenerator:
         if not prompt:
             return None
         request = urllib.request.Request(
-            "https://api.openai.com/v1/chat/completions",
+            f"{self._llm_base_url().rstrip('/')}/chat/completions",
             data=json.dumps({
                 "model": model,
                 "messages": [
