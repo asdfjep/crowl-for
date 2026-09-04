@@ -220,10 +220,16 @@ def detect_trends(today_entities: Dict[str, int],
             })
     
     # 排序
+    def _surge_ratio(x):
+        try:
+            return float(str(x['ratio']).replace('x', '').strip())
+        except (ValueError, TypeError, AttributeError):
+            return 0.0
+
     results['continuous'].sort(key=lambda x: x['today_count'], reverse=True)
-    results['surge'].sort(key=lambda x: int(x['ratio'].replace('x', '')), reverse=True)
+    results['surge'].sort(key=_surge_ratio, reverse=True)
     results['first_seen'].sort(key=lambda x: x['today_count'], reverse=True)
-    
+
     return results
 
 
