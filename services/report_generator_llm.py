@@ -2978,7 +2978,7 @@ class ReportGenerator:
         if mode not in {"api", "openai"}:
             logger.warning("Unknown NEWS_SUMMARY_MODE=%s; using local crawled summaries instead", mode)
             return
-        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        api_key = self._llm_api_key()
         if not api_key:
             self._export_manual_summary_tasks(items, max_chars=max_chars)
             return
@@ -3099,7 +3099,7 @@ class ReportGenerator:
             return
         if os.getenv("NEWS_SUMMARY_USE_AI", "1").lower() not in {"1", "true", "yes"}:
             return
-        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        api_key = self._llm_api_key()
         if not api_key:
             return
 
@@ -3187,7 +3187,7 @@ class ReportGenerator:
             return None
         if os.getenv("NEWS_SUMMARY_USE_AI", "1").lower() not in {"1", "true", "yes"}:
             return None
-        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        api_key = self._llm_api_key()
         if not api_key:
             return None
         model = os.getenv("OPENAI_SUMMARY_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
