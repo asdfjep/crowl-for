@@ -13,6 +13,12 @@ services:
       - NEWS_DATA_DIR=/app/data
       - NEWS_REPORT_DIR=/app/reports
       - NEWS_GENERATE_HTML_BRIEF=1
+      # The configured relay (web 系统设置) serves a vLLM reasoning model:
+      # with thinking enabled it burns the whole max_tokens budget on hidden
+      # chain-of-thought and returns empty content, so every translation and
+      # polish call came back blank. This flag sends
+      # chat_template_kwargs.enable_thinking=false on LLM requests.
+      - NEWS_LLM_NO_THINK=1
       # Crawler run.py --once just lands news_*.json into /app/data (shared
       # volume); the batch job does the analysis, so no ANALYZER_URL is set
       # (it would make the crawler wait on a full analyze call and time out).

@@ -275,6 +275,15 @@ class ReportGenerator:
             return base_url
         return f"{base_url}/chat/completions"
 
+    def _llm_no_think_kwargs(self) -> Dict[str, Any]:
+        """Extra request fields that switch a reasoning-model relay (vLLM
+        chat-template style) out of chain-of-thought mode. Without it the
+        model spends max_tokens on invisible reasoning and returns empty
+        content. vLLM-specific, so only sent when NEWS_LLM_NO_THINK=1."""
+        if os.getenv("NEWS_LLM_NO_THINK", "").strip().lower() in {"1", "true", "yes", "on"}:
+            return {"chat_template_kwargs": {"enable_thinking": False}}
+        return {}
+
     def _extract_json_object(self, text: str) -> Dict[str, str]:
         text = self._normalize_summary_text(text)
         try:
@@ -356,6 +365,7 @@ class ReportGenerator:
             ],
             "temperature": self._env_float("NEWS_LLM_TEMPERATURE", 0.2),
         }
+        payload.update(self._llm_no_think_kwargs())
         request = urllib.request.Request(
             self._llm_chat_url(),
             data=json.dumps(payload).encode("utf-8"),
@@ -3249,7 +3259,9 @@ class ReportGenerator:
                         "Keep proper nouns, company and product names in their original form. "
                         "Return ONLY the Chinese translation, no quotes.\n\n" + text,
                         system="You are a precise Chinese news translator.",
-                        max_tokens=400, temperature=0.1, timeout=15,
+                        # Reasoning relays burn part of max_tokens on hidden
+                        # chain-of-thought, so leave plenty of headroom.
+                        max_tokens=1000, temperature=0.1, timeout=40,
                     )
                 except Exception as exc:
                     logger.info("LLM summary translation failed (%s), Google fallback", exc)

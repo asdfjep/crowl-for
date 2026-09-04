@@ -15,7 +15,7 @@ import logging
 import os
 import urllib.request
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +98,10 @@ def _env_config() -> Dict[str, Optional[str]]:
     }
 
 
+def _no_think_enabled() -> bool:
+    return os.getenv("NEWS_LLM_NO_THINK", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def chat_completion(user_text: str, system: Optional[str] = None,
                     max_tokens: int = 400, temperature: float = 0.2,
                     timeout: Optional[int] = None) -> str:
@@ -109,19 +113,27 @@ def chat_completion(user_text: str, system: Optional[str] = None,
     messages = [{"role": "user", "content": user_text}]
     if system:
         messages.insert(0, {"role": "system", "content": system})
-    body = json.dumps({
+    payload: Dict[str, Any] = {
         "model": cfg["model"],
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
-    }).encode("utf-8")
-    req = urllib.request.Request(base_url + "/chat/completions", data=body, headers={
+    }
+    if _no_think_enabled():
+        # Reasoning-model relays (vLLM + DeepSeek-R1 style chat templates)
+        # otherwise burn the whole max_tokens budget on invisible
+        # chain-of-thought and come back with empty content. This is a vLLM
+        # extension, so only send it when explicitly enabled via
+        # NEWS_LLM_NO_THINK=1 (strict OpenAI endpoints reject unknown fields).
+        payload["chat_template_kwargs"] = {"enable_thinking": False}
+    req = urllib.request.Request(base_url + "/chat/completions",
+                                 data=json.dumps(payload).encode("utf-8"), headers={
         "Authorization": f"Bearer {cfg['api_key']}",
         "Content-Type": "application/json",
     })
     with urllib.request.urlopen(req, timeout=timeout or cfg["timeout"]) as resp:
-        payload = json.loads(resp.read().decode("utf-8"))
-    return (payload["choices"][0]["message"]["content"] or "").strip()
+        response = json.loads(resp.read().decode("utf-8"))
+    return (response["choices"][0]["message"]["content"] or "").strip()
 
 
 def translate_title(title: str) -> str:
@@ -132,6 +144,9 @@ def translate_title(title: str) -> str:
         "(e.g. OpenAI, GPT, 英伟达 stays as is). Return ONLY the translation, "
         "no quotes or explanation.\n\n" + title
     )
-    # 标题翻译是高频小请求：用短超时，端点异常时快速失败降级，避免拖慢整次分析。
+    # Reasoning relays spend most of max_tokens on chain-of-thought; keep the
+    # budget generous enough that the visible translation still fits, and keep
+    # the timeout long enough for the thinking pass. NEWS_LLM_NO_THINK=1 makes
+    # this a fast sub-second call instead.
     return chat_completion(prompt, system="You are a precise news-headline translator.",
-                           max_tokens=120, temperature=0.1, timeout=10)
+                           max_tokens=600, temperature=0.1, timeout=40)
