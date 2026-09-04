@@ -363,11 +363,39 @@ class Scheduler:
         logger.info("Starting crawl cycle...")
         news = await self.fetch_all_news()
         self.save_news(news)
+        self.save_news_json(news)
 
-        # Push to analyzer
+        # Push to analyzer ONLY when an explicit push URL was provided
+        # (CLI --push-url or ANALYZER_URL env/DB). Bundled deploys keep the
+        # crawler to just fetching + landing news_*.json; the analysis step is
+        # done separately by the batch job, which avoids the old 60s push
+        # timeout that used to stall --once.
         await self._push_news(news)
 
         logger.info(f"Cycle completed. Total news: {len(news)}")
+
+    def save_news_json(self, news_list: List[BaseNewsItem]):
+        """Write the crawl result as news_<ts>.json in the analyzer's data dir.
+
+        The analyzer's /app/data is covered by NEWS_DATA_DIR; fall back to the
+        crawler's own DATA_DIR otherwise. This is the primary path the batch
+        analysis reads data from.
+        """
+        if not news_list:
+            return
+        out_dir = Path(os.getenv("NEWS_DATA_DIR", "")).expanduser().resolve() if os.getenv("NEWS_DATA_DIR", "").strip() else DATA_DIR
+        out_dir.mkdir(parents=True, exist_ok=True)
+        news_dict = [n.to_dict() if isinstance(n, BaseNewsItem) else n for n in news_list]
+        sources = sorted({str(n.get("source", "")) for n in news_dict})
+        payload = {
+            "crawlTime": datetime.now().isoformat(),
+            "sources": sources,
+            "news": news_dict,
+        }
+        filename = f"news_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        path = out_dir / filename
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        logger.info(f"Saved {len(news_dict)} news to {path}")
 
     async def _push_news(self, news: List[BaseNewsItem]):
         """Push news to analyzer and mark pushed status"""

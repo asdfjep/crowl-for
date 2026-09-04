@@ -363,8 +363,8 @@ class ReportGenerator:
             method="POST",
         )
 
-        retries = self._env_int("NEWS_LLM_POLISH_RETRIES", 2)
-        timeout = self._env_int("NEWS_LLM_TIMEOUT", 120)
+        retries = self._env_int("NEWS_LLM_POLISH_RETRIES", 1)
+        timeout = self._env_int("NEWS_LLM_TIMEOUT", 30)
         last_exc: Optional[Exception] = None
         for attempt in range(1, retries + 1):
             try:
