@@ -694,7 +694,20 @@ class ReportGenerator:
         return None
 
     def _request_google_translation(self, text: str, source_lang: str = 'auto') -> str:
-        """Translate text with a couple of short retries for transient network failures."""
+        """Translate text with a couple of short retries for transient network failures.
+
+        Prefer the configured LLM (web 「系统设置」) for translation so we never touch
+        translate.googleapis.com on networks where it is unreachable; Google is only a
+        last-resort fallback.
+        """
+        if os.getenv("NEWS_LLM_API_KEY"):
+            try:
+                from services.llm_config import translate_title
+                translated = translate_title(text)
+                if translated:
+                    return translated
+            except Exception as exc:
+                logger.info("LLM title translation failed (%s), Google fallback", exc)
         last_exc: Optional[Exception] = None
         attempts = max(1, self._translation_retries + 1)
         for attempt in range(attempts):
@@ -3226,7 +3239,22 @@ class ReportGenerator:
         if os.getenv("NEWS_DISABLE_MACHINE_TRANSLATION", "").lower() in {"1", "true", "yes"}:
             return None
         try:
-            translated = self._request_google_translation(text, source_lang='en')
+            # 机器翻译兜底也优先走配置的 LLM，Google 只在 LLM 不可用时兜底。
+            translated = None
+            if os.getenv("NEWS_LLM_API_KEY"):
+                try:
+                    from services.llm_config import chat_completion as _llm_chat
+                    translated = _llm_chat(
+                        "Translate the following news summary into concise, natural Chinese. "
+                        "Keep proper nouns, company and product names in their original form. "
+                        "Return ONLY the Chinese translation, no quotes.\n\n" + text,
+                        system="You are a precise Chinese news translator.",
+                        max_tokens=400, temperature=0.1, timeout=15,
+                    )
+                except Exception as exc:
+                    logger.info("LLM summary translation failed (%s), Google fallback", exc)
+            if not translated:
+                translated = self._request_google_translation(text, source_lang='en')
             translated = self._normalize_summary_text(translated)
             if translated and self._is_mostly_chinese(translated):
                 self._summary_translation_failures = 0
